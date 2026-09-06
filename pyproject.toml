@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ezcal"
+version = "0.1.0"
+description = "Easy Calculation - one-command first-principles workflows (Quantum ESPRESSO / extensible to VASP, MLIP)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "ezcal developers" }]
+keywords = ["dft", "quantum-espresso", "materials", "workflow", "cli"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+    "rich>=13.0",
+    "matplotlib>=3.7",
+    "plotly>=5.18",
+    "ase>=3.22",
+    "pymatgen>=2024.1.1",
+    "seekpath>=2.1",
+    "spglib>=2.0",
+]
+
+[project.optional-dependencies]
+mp = ["mp-api>=0.41"]
+mlip = ["sevenn>=0.10.0", "torch>=2.0"]
+vasp = ["aiida-vasp>=5.1"]          # only needed for mock-vasp (replaying recorded runs)
+notebook = ["jupyter", "ipykernel", "ipywidgets"]
+dev = ["pytest>=7.0"]
+all = ["mp-api>=0.41", "jupyter", "ipykernel", "ipywidgets", "aiida-vasp>=5.1"]
+
+[project.scripts]
+ezcal = "ezcal.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/example/ezcal"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ezcal = ["data/*.json", "data/*.yaml", "templates/*.sh", "templates/*.yaml"]

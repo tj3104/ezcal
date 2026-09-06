@@ -1,0 +1,1438 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ezcal ハンドブック</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  --paper:#f4f5f7; --surface:#ffffff; --sunk:#eaedf1; --rail:#eef0f4;
+  --ink:#121721; --muted:#59616e; --faint:#8a929f;
+  --rule:#dde1e8; --rule-strong:#c0c7d1;
+  --accent:#1f4e9c; --accent-soft:#e7eef9; --warn:#b0392c; --warn-soft:#fbecea;
+  --ok:#2f7d5b; --ok-soft:#e7f2ec;
+  --term-bg:#141a24; --term-fg:#dfe5ee;
+  --shadow:0 1px 2px rgba(18,23,33,.05), 0 10px 28px -20px rgba(18,23,33,.35);
+  --sans:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --serif:"Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --nav-w:16rem;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e1219; --surface:#151b24; --sunk:#1b222d; --rail:#121822;
+    --ink:#e3e8f0; --muted:#a2abba; --faint:#79828f;
+    --rule:#262f3b; --rule-strong:#38424f;
+    --accent:#7aa6e3; --accent-soft:#1a2637; --warn:#e08a7c; --warn-soft:#2d1e1c;
+    --ok:#63bd91; --ok-soft:#152720;
+    --term-bg:#0a0e14; --term-fg:#d6dde7;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 30px -22px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e1219; --surface:#151b24; --sunk:#1b222d; --rail:#121822;
+  --ink:#e3e8f0; --muted:#a2abba; --faint:#79828f;
+  --rule:#262f3b; --rule-strong:#38424f;
+  --accent:#7aa6e3; --accent-soft:#1a2637; --warn:#e08a7c; --warn-soft:#2d1e1c;
+  --ok:#63bd91; --ok-soft:#152720;
+  --term-bg:#0a0e14; --term-fg:#d6dde7;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 30px -22px rgba(0,0,0,.9);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; scroll-padding-top:1.5rem}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto} *{animation:none!important; transition:none!important}}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--sans); font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+p,li{font-family:var(--serif); font-size:1.06rem; line-height:1.72}
+p{margin:0; max-width:70ch}
+h1,h2,h3,h4{margin:0; text-wrap:balance; line-height:1.25; font-weight:600; letter-spacing:-.01em}
+a{color:var(--accent); text-underline-offset:.18em}
+code{font-family:var(--mono); font-size:.87em; background:var(--sunk); padding:.1em .32em; border-radius:2px}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:2px}
+
+/* ============ shell ============ */
+.shell{display:grid; grid-template-columns:var(--nav-w) minmax(0,1fr); align-items:start; max-width:1220px; margin:0 auto}
+
+/* ---- sidebar ---- */
+.side{
+  position:sticky; top:0; height:100vh; overflow-y:auto; background:var(--rail);
+  border-right:1px solid var(--rule); padding:1.6rem 1.1rem 3rem;
+  display:flex; flex-direction:column; gap:1.2rem;
+}
+.brand{display:flex; flex-direction:column; gap:.3rem}
+.brand .n{font-size:1.35rem; font-weight:700; letter-spacing:-.03em}
+.brand .v{font-family:var(--mono); font-size:.72rem; color:var(--faint)}
+.levelbox{display:flex; flex-direction:column; gap:.45rem}
+.levelbox .cap{font-size:.68rem; letter-spacing:.13em; text-transform:uppercase; color:var(--faint); font-weight:600}
+.seg{display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--rule-strong); border-radius:3px; overflow:hidden; background:var(--surface)}
+.seg button{
+  appearance:none; border:0; background:transparent; cursor:pointer; padding:.4rem .2rem;
+  font-family:var(--sans); font-size:.78rem; font-weight:500; color:var(--muted);
+  border-right:1px solid var(--rule);
+}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent); color:#fff}
+:root[data-theme="dark"] .seg button[aria-pressed="true"]{color:#0e1219}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .seg button[aria-pressed="true"]{color:#0e1219}}
+nav ol{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.06rem}
+nav a{
+  display:flex; gap:.55rem; align-items:baseline; text-decoration:none; color:var(--muted);
+  font-size:.85rem; padding:.3rem .5rem; border-radius:3px; border-left:2px solid transparent;
+}
+nav a:hover{background:var(--sunk); color:var(--ink)}
+nav a.on{color:var(--accent); border-left-color:var(--accent); background:var(--accent-soft); font-weight:500}
+nav a .k{font-family:var(--mono); font-size:.7rem; color:var(--faint); flex:none; width:1.3rem}
+nav a.on .k{color:var(--accent)}
+
+/* ---- main ---- */
+main{padding:2.5rem clamp(1.2rem,3.5vw,3rem) 6rem; min-width:0}
+section{padding-top:3.2rem; scroll-margin-top:1.2rem}
+section:first-of-type{padding-top:0}
+.s-head{display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; margin-bottom:.4rem}
+.s-num{font-family:var(--mono); font-size:.78rem; color:var(--faint)}
+h2{font-size:clamp(1.4rem,2.6vw,1.75rem)}
+.lead{color:var(--muted); margin:.55rem 0 1.4rem}
+h3{font-size:1.02rem; margin:2rem 0 .55rem; display:flex; gap:.5rem; align-items:baseline}
+h3 .h{font-family:var(--mono); font-size:.8rem; color:var(--accent); font-weight:500}
+h4{font-size:.75rem; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); margin:1.6rem 0 .5rem}
+section > p + p, .block > p + p{margin-top:.7rem}
+
+.badge{
+  font-size:.68rem; font-weight:600; letter-spacing:.08em; padding:.15rem .45rem;
+  border-radius:2px; font-family:var(--sans);
+}
+.badge.b{background:var(--ok-soft); color:var(--ok)}
+.badge.a{background:var(--accent-soft); color:var(--accent)}
+
+/* ---- hero ---- */
+.hero{padding:0 0 .5rem}
+.hero h1{font-size:clamp(2.4rem,6vw,3.4rem); font-weight:700; letter-spacing:-.035em; line-height:1}
+.hero .sub{font-family:var(--serif); font-size:1.2rem; color:var(--muted); margin-top:.9rem; max-width:62ch}
+.facts{display:flex; flex-wrap:wrap; gap:.4rem; margin-top:1.3rem}
+.fact{font-family:var(--mono); font-size:.76rem; color:var(--muted); background:var(--surface); border:1px solid var(--rule); padding:.24rem .55rem; border-radius:2px}
+.fact b{color:var(--ink); font-weight:500}
+
+/* ---- terminal / command ---- */
+.cmd{position:relative; margin:1rem 0 0; border-radius:3px; background:var(--term-bg); overflow:hidden}
+.cmd pre{margin:0; padding:1rem 3.4rem 1rem 1.1rem; overflow-x:auto; font-family:var(--mono); font-size:.84rem; line-height:1.8; color:var(--term-fg)}
+.cmd .p{color:#6f9ce0; user-select:none}
+.cmd .c{color:#7f8b9c}
+.cmd b{color:#fff; font-weight:500}
+:root[data-theme="dark"] .cmd b{color:#f2f6fb}
+.copy{
+  position:absolute; top:.5rem; right:.5rem; appearance:none; cursor:pointer;
+  background:rgba(255,255,255,.08); color:#c8d2df; border:1px solid rgba(255,255,255,.14);
+  border-radius:2px; font-family:var(--sans); font-size:.68rem; letter-spacing:.05em; padding:.22rem .5rem;
+}
+.copy:hover{background:rgba(255,255,255,.16); color:#fff}
+.copy.done{background:var(--ok); border-color:var(--ok); color:#fff}
+.out{
+  margin:.85rem 0 0; background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+  font-family:var(--mono); font-size:.78rem; line-height:1.75; padding:.9rem 1.1rem;
+  overflow-x:auto; color:var(--muted); white-space:pre;
+}
+.out b{color:var(--ink); font-weight:500}
+.out .g{color:var(--ok)}
+.out .cm{color:var(--faint)}
+
+/* ---- tables ---- */
+.tw{overflow-x:auto; margin:1rem 0 0; border:1px solid var(--rule); border-radius:3px; background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-size:.87rem}
+caption{text-align:left; font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); padding:.7rem .9rem .1rem}
+th{
+  text-align:left; font-weight:600; font-size:.7rem; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--muted); background:var(--sunk); padding:.5rem .9rem; white-space:nowrap;
+  border-bottom:1px solid var(--rule);
+}
+td{padding:.55rem .9rem; border-bottom:1px solid var(--rule); vertical-align:top; font-family:var(--sans); font-size:.88rem}
+tbody tr:last-child td{border-bottom:0}
+td.m,th.m{font-family:var(--mono); font-size:.82rem; white-space:nowrap}
+td.m b{font-weight:500; color:var(--ink)}
+td .d{color:var(--muted); font-size:.85rem}
+td .def{font-family:var(--mono); font-size:.78rem; color:var(--faint); white-space:nowrap}
+
+/* ---- callouts ---- */
+.note, .warnbox{
+  margin:1.1rem 0 0; padding:.85rem 1rem; border-radius:3px; font-family:var(--serif);
+  border-left:3px solid; font-size:1rem; line-height:1.65;
+}
+.note{background:var(--accent-soft); border-color:var(--accent)}
+.warnbox{background:var(--warn-soft); border-color:var(--warn)}
+.note b, .warnbox b{font-family:var(--sans); font-weight:600; font-size:.82rem; letter-spacing:.05em; display:block; margin-bottom:.2rem}
+.note b{color:var(--accent)} .warnbox b{color:var(--warn)}
+.note p, .warnbox p{max-width:none; font-size:1rem}
+
+/* ---- flow / precedence ---- */
+.flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:.4rem; margin-top:1.1rem}
+.flow .step{
+  flex:1 1 8rem; background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+  padding:.6rem .7rem; display:flex; flex-direction:column; gap:.15rem; min-width:0;
+}
+.flow .step .t{font-family:var(--mono); font-size:.76rem; color:var(--ink); overflow-wrap:anywhere}
+.flow .step .s{font-size:.74rem; color:var(--faint)}
+.flow .arr{align-self:center; color:var(--rule-strong); font-size:.9rem; flex:none}
+.flow .step.last{border-color:var(--accent); background:var(--accent-soft)}
+.flow .step.last .t{color:var(--accent)}
+
+.chain{display:flex; flex-wrap:wrap; gap:.35rem; align-items:center; margin-top:.7rem; font-family:var(--mono); font-size:.8rem}
+.chain span{background:var(--sunk); padding:.2rem .5rem; border-radius:2px; color:var(--muted)}
+.chain span.self{background:var(--accent); color:#fff}
+:root[data-theme="dark"] .chain span.self{color:#0e1219}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .chain span.self{color:#0e1219}}
+.chain .ar{color:var(--rule-strong)}
+
+/* ---- tree ---- */
+.tree{
+  margin:1rem 0 0; background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+  padding:1rem 1.1rem; font-family:var(--mono); font-size:.79rem; line-height:1.85;
+  overflow-x:auto; white-space:pre; color:var(--muted);
+}
+.tree b{color:var(--ink); font-weight:500}
+.tree i{color:var(--accent); font-style:normal}
+.tree .cm{color:var(--faint)}
+
+/* ---- glossary ---- */
+dl.gloss{margin:1rem 0 0; display:grid; grid-template-columns:11rem 1fr; gap:.1rem 1.2rem; align-items:baseline}
+dl.gloss dt{font-family:var(--mono); font-size:.84rem; color:var(--ink); padding:.45rem 0; border-top:1px solid var(--rule)}
+dl.gloss dd{margin:0; font-family:var(--serif); font-size:1rem; color:var(--muted); padding:.45rem 0; border-top:1px solid var(--rule)}
+dl.gloss dt:first-of-type, dl.gloss dd:first-of-type{border-top:0}
+
+ul.plain{margin:.8rem 0 0; padding:0; list-style:none; display:grid; gap:.5rem}
+ul.plain li{padding-left:1.1rem; position:relative; color:var(--muted); max-width:70ch}
+ul.plain li::before{content:"—"; position:absolute; left:0; color:var(--rule-strong)}
+ul.plain b{color:var(--ink); font-family:var(--sans); font-weight:600; font-size:.92rem}
+
+footer{margin-top:4rem; padding-top:1.6rem; border-top:1px solid var(--rule); color:var(--faint); font-size:.82rem}
+footer p{font-family:var(--sans); font-size:.82rem}
+
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr}
+  .side{position:static; height:auto; border-right:0; border-bottom:1px solid var(--rule); padding:1.2rem 1.2rem 1.4rem}
+  nav ol{flex-direction:row; flex-wrap:wrap; gap:.25rem}
+  nav a{border-left:0; border-bottom:2px solid transparent; padding:.25rem .5rem}
+  nav a.on{border-left:0; border-bottom-color:var(--accent)}
+  nav a .k{display:none}
+  main{padding:1.8rem 1.2rem 4rem}
+  dl.gloss{grid-template-columns:1fr; gap:0}
+  dl.gloss dd{border-top:0; padding-top:0; padding-bottom:.7rem}
+}
+</style>
+
+</head>
+<body>
+<div class="shell">
+<aside class="side">
+  <div class="brand">
+    <span class="n">ezcal</span>
+    <span class="v">0.1.0 · ハンドブック</span>
+  </div>
+  <div class="levelbox">
+    <span class="cap">表示</span>
+    <div class="seg" role="group" aria-label="レベルで絞り込む">
+      <button type="button" data-level="all" aria-pressed="true">すべて</button>
+      <button type="button" data-level="b" aria-pressed="false">基本</button>
+      <button type="button" data-level="a" aria-pressed="false">応用</button>
+    </div>
+  </div>
+  <nav aria-label="目次">
+    <ol>
+      <li><a href="#start" data-lv="b"><span class="k">01</span>5分で最初の計算</a></li>
+      <li><a href="#cmds" data-lv="b"><span class="k">02</span>コマンド一覧</a></li>
+      <li><a href="#read" data-lv="b"><span class="k">03</span>結果の読み方</a></li>
+      <li><a href="#tune" data-lv="b"><span class="k">04</span>よく使う調整</a></li>
+      <li><a href="#opts" data-lv="a"><span class="k">05</span>オプション全一覧</a></li>
+      <li><a href="#conf" data-lv="a"><span class="k">06</span>qe_config.yaml</a></li>
+      <li><a href="#qsub" data-lv="a"><span class="k">07</span>qsub で流す</a></li>
+      <li><a href="#eng" data-lv="a"><span class="k">08</span>エンジン切り替え</a></li>
+      <li><a href="#api" data-lv="a"><span class="k">09</span>Python API</a></li>
+      <li><a href="#trouble" data-lv="b"><span class="k">10</span>困ったときは</a></li>
+      <li><a href="#charge" data-lv="b"><span class="k">11</span>電荷密度と原子電荷</a></li>
+      <li><a href="#bench" data-lv="b"><span class="k">12</span>ベンチマークで確認</a></li>
+      <li><a href="#gloss" data-lv="b"><span class="k">13</span>用語ミニ辞典</a></li>
+    </ol>
+  </nav>
+</aside>
+
+<main>
+  <div class="hero">
+    <h1>ezcal ハンドブック</h1>
+    <p class="sub">構造ファイルを 1 つ渡すだけで、構造最適化からバンド構造・状態密度まで通す。
+       カットオフも k 点も擬ポテンシャルも、指定しなければ自動で決まります。</p>
+    <div class="facts">
+      <span class="fact">engine <b>Quantum ESPRESSO 7.5</b></span>
+      <span class="fact">python <b>≥ 3.10</b></span>
+      <span class="fact">venv <b>ezcalenv312</b></span>
+      <span class="fact">also <b>SevenNet (MLIP)</b></span>
+    </div>
+    <div class="note">
+      <b>このページの読み方</b>
+      <p>左の「表示」で <b style="display:inline">基本</b> に絞ると、はじめての人が必要な 5 章だけになります。
+         <b style="display:inline">応用</b> は全オプション・設定ファイル・クラスタ運用・Python API・拡張です。</p>
+    </div>
+  </div>
+
+<!-- ========================= 01 ========================= -->
+<section id="start" data-lv="b">
+  <div class="s-head"><span class="s-num">01</span><h2>5分で最初の計算</h2><span class="badge b">基本</span></div>
+  <p class="lead">インストールして、Si のバンド構造と状態密度を出すところまで。</p>
+
+  <h3><span class="h">1</span>インストール</h3>
+  <p>仮想環境を有効にして、リポジトリを editable で入れます。依存パッケージ（pymatgen・ASE・seekpath・matplotlib・plotly ほか）も一緒に入ります。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>source /home/tajimamainpc/.venv/ezcalenv312/bin/activate</b>
+<span class="p">$</span> <b>uv pip install -e /home/tajimamainpc/06_claude_code/08_qez</b>
+<span class="p">$</span> <b>ezcal version</b>
+<span class="c">ezcal 0.1.0  (python 3.12.3)</span></pre></div>
+  <p style="margin-top:.9rem">Materials Project から構造を取りたいときや、機械学習ポテンシャルを使いたいときは追加で入れます。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>uv pip install -e '/home/tajimamainpc/06_claude_code/08_qez[all]'</b>   <span class="c"># + mp-api, jupyter</span>
+<span class="p">$</span> <b>uv pip install sevenn</b>                                              <span class="c"># SevenNet (MLIP)</span>
+<span class="p">$</span> <b>uv pip install aiida-vasp</b>                                          <span class="c"># mock-vasp (VASP 再生)</span></pre></div>
+
+  <h3><span class="h">2</span>Quantum ESPRESSO の場所を確認</h3>
+  <p><code>pw.x</code> は既定で <code>~/repos/q-e/bin</code> から探します。違う場所にあるなら設定ファイルで変えます（<a href="#conf">06 章</a>）。まず今の状態を確認しましょう。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal engines</b></pre></div>
+  <div class="out"><b>engine   tasks                                       status</b>
+qe       scf, relax, vc-relax, nscf, bands, dos      <span class="g">ready</span>
+vasp     scf, relax, vc-relax, nscf, bands, dos      <span class="cm">VASP command 'vasp_std' not found …</span>
+mlip     scf, relax, vc-relax                        <span class="g">ready</span></div>
+  <p style="margin-top:.8rem">VASP は <code>vasp.command</code> が指す実行ファイルを使います。ライセンスが無くても
+     <code>mock-vasp</code> で記録済み計算を再生できます（<a href="#eng">08 章</a>）。</p>
+
+  <h3><span class="h">3</span>構造を用意する</h3>
+  <p>CIF・POSCAR・xyz・pymatgen JSON・QE の入出力ファイルが読めます。Materials Project の ID をそのまま渡すこともできます。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal mp mp-149 --out Si.cif --mp-api-key &lt;あなたのキー&gt;</b>
+<span class="c">Si -&gt; Si.cif</span>
+
+<span class="c"># 環境変数に入れておけば --mp-api-key は不要</span>
+<span class="p">$</span> <b>export MP_API_KEY=&lt;あなたのキー&gt;</b></pre></div>
+
+  <h3><span class="h">4</span>何が起きるか先に見る</h3>
+  <p>計算を投げる前に、ezcal が自動で決めた値を確認できます。ここで出た擬ポテンシャルは、この時点でダウンロード済みになります。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal info Si.cif --band-path</b></pre></div>
+  <div class="out">{
+  <b>"formula"</b>: "Si",  <b>"natoms"</b>: 2,  <b>"volume"</b>: 40.048,
+  <b>"spacegroup"</b>: "Fd-3m",  <b>"spacegroup_number"</b>: 227
+}
+suggested k-mesh (kspacing=0.25): <b>[9, 9, 9]</b>
+  Si  <b>Si.pbe-n-kjpaw_psl.1.0.0.UPF</b>  (PAW, Z=4)
+suggested cutoffs: <b>ecutwfc=44.0 Ry  ecutrho=352.0 Ry</b>
+k-path (131 points): <b>Γ -&gt; X -&gt; U|K -&gt; Γ -&gt; L -&gt; W -&gt; X</b></div>
+
+  <h3><span class="h">5</span>走らせる</h3>
+  <p><code>auto</code> は初期構造から最後まで一気に通します。セル最適化 → SCF → 密メッシュの NSCF → 状態密度 → バンド構造の順で、電荷密度を使い回します。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal auto Si.cif --np 8 --plot both</b></pre></div>
+  <p style="margin-top:.9rem">これだけです。2 原子の Si なら 8 コアで 1 分ほど。結果は <code>ezcal_out/Si_auto/</code> に入ります。</p>
+  <div class="note">
+    <b>急いでいるとき</b>
+    <p>テストや下見なら <code>--ecutwfc 30 --kmesh 6 6 6 --conv-thr 1e-6</code> のように緩めると数倍速くなります。
+       本番の数字を出すときは付けないでください（自動値が使われます）。</p>
+  </div>
+</section>
+
+<!-- ========================= 02 ========================= -->
+<section id="cmds" data-lv="b">
+  <div class="s-head"><span class="s-num">02</span><h2>コマンド一覧</h2><span class="badge b">基本</span></div>
+  <p class="lead">bands や dos は単体では正しい答えが出せないので、必要な前段を ezcal が自動で流します。</p>
+
+  <div class="tw">
+  <table>
+    <caption>計算コマンド</caption>
+    <thead><tr><th>コマンド</th><th>内容</th><th>実際に走る順番</th></tr></thead>
+    <tbody>
+      <tr><td class="m"><b>ezcal scf</b></td><td>自己無撞着計算。エネルギー・力・応力</td><td class="m">scf</td></tr>
+      <tr><td class="m"><b>ezcal relax</b></td><td>原子位置の最適化（セルは固定）</td><td class="m">relax</td></tr>
+      <tr><td class="m"><b>ezcal vc-relax</b></td><td>セルと原子位置の同時最適化</td><td class="m">vc-relax</td></tr>
+      <tr><td class="m"><b>ezcal nscf</b></td><td>密な k 点での非自己無撞着計算</td><td class="m">scf → nscf</td></tr>
+      <tr><td class="m"><b>ezcal bands</b></td><td>高対称線に沿ったバンド構造</td><td class="m">scf → bands</td></tr>
+      <tr><td class="m"><b>ezcal dos</b></td><td>全 DOS と軌道射影 DOS（PDOS）</td><td class="m">scf → nscf → dos</td></tr>
+      <tr><td class="m"><b>ezcal auto</b></td><td>初期構造から全部</td><td class="m">vc-relax → scf → nscf → dos → bands</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="tw">
+  <table>
+    <caption>補助コマンド</caption>
+    <thead><tr><th>コマンド</th><th>内容</th></tr></thead>
+    <tbody>
+      <tr><td class="m"><b>ezcal info</b> STRUCT</td><td>対称性・推奨 k 点・擬ポテンシャル・カットオフを表示。<code>--band-path</code> で k 経路も</td></tr>
+      <tr><td class="m"><b>ezcal mp</b> mp-149</td><td>Materials Project から構造を取得して CIF 保存。<code>-o</code> で出力先</td></tr>
+      <tr><td class="m"><b>ezcal engines</b></td><td>使えるエンジンと、この環境で動くかどうか</td></tr>
+      <tr><td class="m"><b>ezcal plot</b> RUNDIR</td><td>計算済みディレクトリから図だけ描き直す（再計算なし）</td></tr>
+      <tr><td class="m"><b>ezcal config init</b></td><td>コメント付きの <code>qe_config.yaml</code> を書き出す。<code>--user</code> で <code>~/.config/ezcal/</code></td></tr>
+      <tr><td class="m"><b>ezcal config show</b></td><td>いま効いている設定と、それをどのファイルから読んだか。<code>--flat</code> で 1 行 1 キー</td></tr>
+      <tr><td class="m"><b>ezcal pseudo list</b> Fe</td><td>その元素で選べる擬ポテンシャル一覧（先頭の <code>*</code> が既定で選ばれるもの）</td></tr>
+      <tr><td class="m"><b>ezcal pseudo fetch</b> Si O</td><td>擬ポテンシャルを取得して、種類・価電子数・推奨カットオフを表示</td></tr>
+      <tr><td class="m"><b>ezcal charge</b> STRUCT</td><td>電荷密度と原子電荷（<a href="#charge">11 章</a>）</td></tr>
+      <tr><td class="m"><b>ezcal bench list</b></td><td>ベンチマーク対象と参照値の一覧</td></tr>
+      <tr><td class="m"><b>ezcal bench run</b></td><td>金属20＋酸化物20を流す（<a href="#bench">11 章</a>）</td></tr>
+      <tr><td class="m"><b>ezcal bench report</b> DIR</td><td>実験値・Materials Project との予実比較</td></tr>
+      <tr><td class="m"><b>ezcal vasp registry</b></td><td>mock-vasp が再生できる記録済み計算の一覧</td></tr>
+      <tr><td class="m"><b>ezcal vasp record</b> DIR</td><td>計算済みの VASP ディレクトリをレジストリに登録する</td></tr>
+      <tr><td class="m"><b>ezcal vasp hash</b> DIR</td><td>入力ディレクトリの mock-vasp ハッシュ（不一致の調査用）</td></tr>
+      <tr><td class="m"><b>ezcal version</b></td><td>バージョン表示</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>前段を飛ばす・一部だけ飛ばす</h3>
+  <div class="chain"><span>scf</span><span class="ar">→</span><span class="self">bands</span></div>
+  <p style="margin-top:.8rem">すでに同じ実行ディレクトリで scf が終わっていて、バンドだけ描き直したい場合は <code>--only</code> を付けます（<code>tmp/</code> に電荷密度が残っている必要があるので、<code>-o</code> と <code>--name</code> で同じ場所を指してください）。<code>auto</code> の途中を抜くには <code>--skip</code> です。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal bands Si.cif --only -o ezcal_out --name Si_auto</b>   <span class="c"># scf を再実行しない</span>
+<span class="p">$</span> <b>ezcal auto Si.cif --skip nscf,dos</b>                        <span class="c"># DOS は要らない</span>
+<span class="p">$</span> <b>ezcal auto Si.cif --no-relax</b>                             <span class="c"># 構造最適化しない</span>
+<span class="p">$</span> <b>ezcal auto Si.cif --fixed-cell</b>                           <span class="c"># セルは固定して原子だけ緩和</span></pre></div>
+</section>
+
+<!-- ========================= 03 ========================= -->
+<section id="read" data-lv="b">
+  <div class="s-head"><span class="s-num">03</span><h2>結果の読み方</h2><span class="badge b">基本</span></div>
+  <p class="lead">画面に出るもの、ディスクに残るもの、そして数字の意味。</p>
+
+  <h3>画面</h3>
+  <div class="out"><span class="cm">task         auto
+formula      MgO  (2 atoms)
+space group  Fm-3m (#225)
+engine       qe
+scheduler    local (np=8)
+run dir      …/ezcal_out/MgO_auto</span>
+    <b>plan: vc-relax -&gt; scf -&gt; nscf -&gt; dos -&gt; bands</b>
+[1/5] vc-relax: cell + ionic relaxation
+    k-path (167 points): Γ -&gt; X -&gt; U|K -&gt; Γ -&gt; L -&gt; W
+[2/5] scf: self-consistent field
+[3/5] nscf: non self-consistent (dense mesh)
+[4/5] dos: density of states
+[5/5] bands: band structure
+
+ step      ok    E (eV)   E/atom (eV)   E_F (eV)   gap (eV)   max|F|   P (GPa)   t (s)
+ vc-relax  <span class="g">yes</span>   -2494.11   -1247.0547    10.7326      4.491   0.0000     -0.09     3.3
+ scf       <span class="g">yes</span>   -2494.11   -1247.0547    10.7326      4.490   0.0000     -0.21     0.8
+ nscf      <span class="g">yes</span>          -             -    11.6544      4.492        -         -     2.0
+ dos       <span class="g">yes</span>          -             -    11.6540          -        -         -     1.4
+ bands     <span class="g">yes</span>          -             -    11.6544      4.492        -         -     4.0</div>
+
+  <ul class="plain">
+    <li><b>nscf と bands に E が出ないのは正常です。</b>非自己無撞着計算の全エネルギーは物理的に意味を持たないので、あえて表示していません。</li>
+    <li><b>gap は価電子数から占有バンド数を数えて求めています。</b>スメアリングを使うと QE の E<sub>F</sub> は絶縁体でも価電子帯上端より下に来るため、「E<sub>F</sub> を跨ぐバンドがあるか」で判定すると Si すら金属になってしまいます。金属なら <code>0.000</code>、そしてレポートに「metallic」と明記されます。</li>
+    <li><b>gap が段によって少し違うのは k 点密度の差です。</b>密メッシュの nscf / bands の値がより正確です。</li>
+    <li><b>スピン分極計算では M（正味の磁化）と |M|（絶対磁化）の列が自動で増えます。</b>
+        反強磁性では M ≈ 0、|M| が実際の大きさです。サイトごとの磁気モーメントは
+        <code>report.md</code> と <code>summary.json</code> の <code>site_magnetization</code> に入ります。
+        nscf と bands は電荷密度を作り直さないので、この 2 列は <code>-</code> になります。</li>
+  </ul>
+
+  <h3>ディスクに残るもの</h3>
+  <div class="tree"><b>ezcal_out/Si_auto/</b>
+├── <i>input_structure.cif</i>  <span class="cm">.json     入力構造</span>
+├── <i>relaxed_structure.cif</i>           <span class="cm">緩和後</span>
+├── <i>final_structure.cif</i>             <span class="cm">最終的に使った構造</span>
+├── <i>qe_config.used.yaml</i>             <span class="cm">この計算で実際に効いた全設定（再現用）</span>
+├── 00_vc-relax/  01_scf/  02_nscf/  03_dos/  04_bands/
+│     ├── scf.in / scf.out            <span class="cm">QE の入出力そのまま</span>
+│     └── scf_result.json             <span class="cm">その段の解析済み結果</span>
+├── tmp/                              <span class="cm">QE の outdir（全段で共有）</span>
+├── plots/
+│     ├── <i>bands.png</i>   <i>bands.html</i>       <span class="cm">静止画 / 対話的</span>
+│     ├── <i>dos.png</i>     <i>dos.html</i>
+│     ├── <i>bands_dos.png</i> <i>bands_dos.html</i>  <span class="cm">並べたもの</span>
+│     ├── <i>convergence.png/.html</i>
+│     └── <i>bands.csv</i>   <i>dos.csv</i>           <span class="cm">生データ</span>
+├── <i>raw_data.json</i>                   <span class="cm">ezcal plot で描き直すための配列</span>
+├── <i>summary.json</i>                    <span class="cm">機械可読サマリ</span>
+└── <i>report.md</i>                       <span class="cm">人が読むサマリ</span></div>
+
+  <div class="note">
+    <b>図のゼロ点</b>
+    <p>絶縁体は価電子帯上端（VBM）を、金属はフェルミ準位（E<sub>F</sub>）をゼロにします。
+       軸ラベルも <code>E − E_VBM</code> / <code>E − E_F</code> と出し分けるので、図を見ればどちらを基準にしたか分かります。</p>
+  </div>
+
+  <h3>summary.json を他のスクリプトから使う</h3>
+  <div class="cmd"><pre><span class="p">$</span> <b>python -c "import json; d=json.load(open('ezcal_out/Si_auto/summary.json')); \
+print(d['steps']['bands']['band_gap'])"</b>
+<span class="c">0.5973963045733841</span></pre></div>
+  <p style="margin-top:.8rem">各段に <code>energy</code> <code>energy_per_atom</code> <code>fermi_energy</code> <code>band_gap</code>
+     <code>homo</code> <code>lumo</code> <code>magnetization</code> <code>max_force</code> <code>pressure</code>
+     <code>nelec</code> <code>nbnd</code> <code>kmesh</code> <code>nkpt</code> <code>walltime</code> <code>files</code> が入っています。</p>
+
+  <h3>図だけ描き直す</h3>
+  <p>エネルギー窓を変えたい、plotly 版も欲しい、というときは再計算せずに描き直せます。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal plot ezcal_out/Si_auto --plot both --emin -8 --emax 8 --dpi 300</b></pre></div>
+</section>
+
+<!-- ========================= 04 ========================= -->
+<section id="tune" data-lv="b">
+  <div class="s-head"><span class="s-num">04</span><h2>よく使う調整</h2><span class="badge b">基本</span></div>
+  <p class="lead">まず知っておくべき 5 つのつまみと、系ごとの定石。</p>
+
+  <h3>やりたいこと別の逆引き</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>やりたいこと</th><th>付けるオプション</th></tr></thead>
+    <tbody>
+      <tr><td>精度を上げたい</td><td class="m">--ecutwfc 80 --ecutrho 640 --kmesh 12 12 12 --conv-thr 1e-10</td></tr>
+      <tr><td>とにかく速く下見したい</td><td class="m">--ecutwfc 30 --kmesh 4 4 4 --conv-thr 1e-6</td></tr>
+      <tr><td>金属を計算する</td><td class="m">--smearing mv --degauss 0.02 --kmesh 12 12 12</td></tr>
+      <tr><td>絶縁体・分子の DOS をきれいに</td><td class="m">--occupations fixed --set nscf.kmesh_scale=3</td></tr>
+      <tr><td>強磁性体（Fe, Co, Ni）</td><td class="m">--spin --magmom Fe=0.6</td></tr>
+      <tr><td>反強磁性を計算する</td><td class="m">--afm Cr=1.0 <span class="d">（磁気単位胞を渡すこと）</span></td></tr>
+      <tr><td>反強磁性酸化物に +U</td><td class="m">--afm Ni=2.0 --hubbard-u Ni=6.0</td></tr>
+      <tr><td>遷移金属酸化物に +U</td><td class="m">--spin --hubbard-u Ni=6.0</td></tr>
+      <tr><td>層状物質・分子結晶</td><td class="m">--vdw grimme-d3</td></tr>
+      <tr><td>孤立分子（真空セル）</td><td class="m">--kmesh 1 1 1 --occupations fixed --set dft.assume_isolated=martyna-tuckerman</td></tr>
+      <tr><td>汎関数を変える</td><td class="m">-f pbesol <span class="d">（擬ポテンシャルもそれに合わせて選び直されます）</span></td></tr>
+      <tr><td>SCF が振動して落ちない</td><td class="m">--set dft.mixing_beta=0.2 --set dft.mixing_mode=local-TF</td></tr>
+      <tr><td>バンド線をなめらかに</td><td class="m">--line-density 40</td></tr>
+      <tr><td>図の縦軸を狭める</td><td class="m">--emin -6 --emax 6</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>1. k 点</h3>
+  <p>指定しなければ <code>kspacing</code>（既定 0.25 Å⁻¹、2π 込み＝VASP の KSPACING と同じ流儀）から逆格子ベクトル長で決まります。
+     セルが小さいほどメッシュは密になります。金属は絶縁体より 1.5〜2 倍密にしてください。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal scf Si.cif --kmesh 8 8 8</b>      <span class="c"># 直接指定</span>
+<span class="p">$</span> <b>ezcal scf Si.cif --kspacing 0.15</b>    <span class="c"># 間隔で指定（大きなセルでも一貫する）</span></pre></div>
+  <p style="margin-top:.8rem">DOS 用の nscf は自動で scf の 2 倍にします（<code>nscf.kmesh_scale</code>）。</p>
+
+  <h3>2. カットオフ</h3>
+  <p>擬ポテンシャルのヘッダに書かれた推奨値の、系内の全元素での最大値を使います。
+     <code>ecutrho</code> は PAW/USPP なら <code>ecutwfc × 8</code>、ノルム保存なら <code>× 4</code>。
+     どの値が採用されるかは <code>ezcal pseudo fetch</code> で先に確認できます。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal pseudo fetch Mg O</b></pre></div>
+  <div class="out"><b>element  file                              type   Z_val  ecutwfc  ecutrho</b>
+Mg       Mg.pbe-spnl-kjpaw_psl.1.0.0.UPF   PAW    10     58       385
+O        O.pbe-n-kjpaw_psl.1.0.0.UPF       PAW    6      47       323
+suggested for this set: <b>ecutwfc=58.0 Ry, ecutrho=464.0 Ry</b></div>
+<p style="margin-top:.8rem">ecutwfc は 2 元素の最大値 58 Ry。ecutrho は各ファイルの推奨値 (385, 323) より
+   <code>58 × 8 = 464</code> のほうが大きいので、そちらが採用されます。</p>
+  <div class="warnbox">
+    <b>カットオフを下げると答えが変わります</b>
+    <p>テストで MgO を 58 Ry ではなく 40 Ry で回すと、バンドギャップが 4.49 eV → 5.67 eV とずれました。
+       速度のために下げるのは下見のときだけにしてください。</p>
+  </div>
+
+  <h3>3. 占有数とスメアリング</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>設定</th><th>使いどころ</th></tr></thead>
+    <tbody>
+      <tr><td class="m">smearing + mv（既定）</td><td>金属。絶縁体でも安全側に動くので既定にしている</td></tr>
+      <tr><td class="m">fixed</td><td>ギャップがあると分かっている系。E<sub>F</sub> が VBM に乗るので図が読みやすい</td></tr>
+      <tr><td class="m">tetrahedra</td><td>DOS を滑らかにしたいとき。nscf 段では自動でこれを使う</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>4. 磁性</h3>
+  <h4>強磁性</h4>
+  <p><code>--spin</code> でスピン分極（nspin=2）になります。初期磁化を与えないと全元素 0.3 が入るので、
+     磁性元素には明示したほうが収束が速くなります。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal auto Fe.cif --spin --magmom Fe=0.6 --kmesh 12 12 12 --degauss 0.03</b></pre></div>
+  <p style="margin-top:.8rem">結果表に M（正味の磁化）と |M|（絶対磁化）の列が増え、
+     DOS はアップ/ダウンが上下に分かれて描かれます。</p>
+
+  <h4>反強磁性</h4>
+  <p><code>--afm</code> で元素を副格子に分けます。その元素のサイトを<b>出現順に</b>
+     <code>Ni1</code>, <code>Ni2</code>, <code>Ni1</code>, … とラベル付けし、
+     <code>+m</code>, <code>-m</code> を交互に与えます。pw.x からは別々の species に見えるので、
+     対称性も正しく下がります。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal auto NiO.cif --afm Ni=2.0 --hubbard-u Ni=6.0</b>
+<span class="p">$</span> <b>ezcal scf Cr.cif --afm Cr</b>                 <span class="c"># 大きさを省くと 0.5 が使われる</span>
+<span class="p">$</span> <b>ezcal scf Cr.cif --magmom Cr=1.0/-1.0</b>     <span class="c"># --afm Cr=1.0 と同じ</span>
+<span class="p">$</span> <b>ezcal scf X.cif --magmom Mn=2/-2/2/-2,O=0</b>  <span class="c"># 4 副格子も書ける</span></pre></div>
+  <div class="warnbox">
+    <b>磁気単位胞は自分で用意してください</b>
+    <p>反強磁性配置を収められる大きさのセルが要ります。NiO なら岩塩型の primitive cell
+       （Ni 1 個）ではなく、AFM-II の菱面体 4 原子セル（Ni 2 + O 2）です。
+       副格子を指定すると ezcal は自動的に <code>--as-is</code> に切り替え、セルを縮約しません。
+       サイト数が足りなければその場でエラーになります。</p>
+  </div>
+  <ul class="plain">
+    <li><b>+U は元素指定のままで通ります。</b><code>--hubbard-u Ni=6.0</code> は
+        <code>U Ni1-3d 6.0</code> と <code>U Ni2-3d 6.0</code> の両方に展開されます。
+        副格子ごとに変えたければ <code>--hubbard-u Ni1=6.0,Ni2=5.0</code> と書けます。</li>
+    <li><b>バンド計算も磁気単位胞で行われます。</b>seekpath にも副格子を別 species として渡すため、
+        磁気ブリルアンゾーンに対応した正しい経路が使われます（例: bcc Cr は AFM にすると
+        bcc の Γ-H-N-P ではなく単純立方の Γ-X-M-R になります）。</li>
+    <li><b>PDOS は副格子ごとに出ます。</b>反強磁性なら Ni1-d と Ni2-d が上下対称の鏡像になり、
+        これが秩序が立っている証拠になります。</li>
+    <li><b>正味の磁化 M はほぼ 0 になります。</b>意味のある数字は |M|（絶対磁化）と、
+        レポートに出るサイトごとの磁気モーメントです。</li>
+  </ul>
+  <div class="out"><span class="cm"># NiO (AFM-II) + U=6 eV, report.md より</span>
+ step   ok   E_F (eV)   gap (eV)   M (uB/cell)   abs M (uB/cell)
+ scf    <span class="g">yes</span>    15.0130      3.204         0.000             3.586
+ nscf   <span class="g">yes</span>    15.2861      3.063             -                 -
+
+<b>Magnetic moment per site (uB): Ni1 +1.660, Ni2 -1.660, O -0.000, O -0.000</b></div>
+
+  <h3>5. 出力形式</h3>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal auto Si.cif --plot matplotlib</b>   <span class="c"># PNG だけ（既定）</span>
+<span class="p">$</span> <b>ezcal auto Si.cif --plot plotly</b>       <span class="c"># 対話的 HTML だけ</span>
+<span class="p">$</span> <b>ezcal auto Si.cif --plot both</b>         <span class="c"># 両方</span>
+<span class="p">$</span> <b>ezcal auto Si.cif --plot none</b>         <span class="c"># 図を作らない（CSV と JSON は残る）</span></pre></div>
+</section>
+
+<!-- ========================= 05 ========================= -->
+<section id="opts" data-lv="a">
+  <div class="s-head"><span class="s-num">05</span><h2>オプション全一覧</h2><span class="badge a">応用</span></div>
+  <p class="lead">計算コマンド（scf / relax / vc-relax / nscf / bands / dos / auto）は全て同じオプションを受け付けます。
+     「既定」が空欄のものは指定しなければ自動決定、または QE の既定に従います。</p>
+
+  <div class="tw">
+  <table>
+    <caption>DFT パラメータ</caption>
+    <thead><tr><th>オプション</th><th>既定</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td class="m"><b>--ecutwfc</b> &lt;float&gt;</td><td class="def">自動</td><td>波動関数のカットオフ（Ry）</td></tr>
+      <tr><td class="m"><b>--ecutrho</b> &lt;float&gt;</td><td class="def">自動</td><td>電荷密度のカットオフ（Ry）</td></tr>
+      <tr><td class="m"><b>--kmesh</b> nx ny nz</td><td class="def">自動</td><td>Monkhorst-Pack メッシュ</td></tr>
+      <tr><td class="m"><b>--kspacing</b> &lt;float&gt;</td><td class="def">0.25</td><td>逆格子空間の間隔（Å⁻¹, 2π 込み）。--kmesh 未指定時に使う</td></tr>
+      <tr><td class="m"><b>-f, --functional</b></td><td class="def">pbe</td><td>pbe / pbesol / pz。擬ポテンシャルの選択にも連動する</td></tr>
+      <tr><td class="m"><b>--input-dft</b></td><td class="def">—</td><td>QE の input_dft を直接指定（例 <code>vdw-df2-b86r</code>）</td></tr>
+      <tr><td class="m"><b>--occupations</b></td><td class="def">smearing</td><td>smearing / fixed / tetrahedra</td></tr>
+      <tr><td class="m"><b>--smearing</b></td><td class="def">mv</td><td>mv / gaussian / mp / fd</td></tr>
+      <tr><td class="m"><b>--degauss</b> &lt;float&gt;</td><td class="def">0.02</td><td>スメアリング幅（Ry）</td></tr>
+      <tr><td class="m"><b>--conv-thr</b> &lt;float&gt;</td><td class="def">1e-8</td><td>SCF の収束閾値（Ry）</td></tr>
+      <tr><td class="m"><b>--nbnd</b> &lt;int&gt;</td><td class="def">自動</td><td>バンド数。既定は占有バンド + 30〜40 %</td></tr>
+      <tr><td class="m"><b>--spin</b>, <b>--magnetic</b></td><td class="def">off</td><td>共線スピン分極（nspin=2）</td></tr>
+      <tr><td class="m"><b>--magmom</b> Fe=0.6,O=0</td><td class="def">全元素 0.3</td><td>初期磁化。指定すると --spin も自動で有効になる。
+          <code>/</code> で区切ると副格子ごとの値になる（<code>Ni=2.0/-2.0</code>）</td></tr>
+      <tr><td class="m"><b>--afm</b> Ni=2.0</td><td class="def">—</td><td>反強磁性。その元素のサイトを出現順に +m / −m の副格子へ分ける。
+          大きさを省くと 0.5。セルは自動で縮約されなくなる</td></tr>
+      <tr><td class="m"><b>--hubbard-u</b> Fe=4.0</td><td class="def">—</td><td>DFT+U。軌道（3d, 2p …）は元素から自動決定し HUBBARD カードを書く。
+          副格子には自動で展開される（<code>Ni1</code> 指定で個別化も可）</td></tr>
+      <tr><td class="m"><b>--vdw</b></td><td class="def">—</td><td>vdw_corr（grimme-d3 / grimme-d2 / xdm / ts）</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="tw">
+  <table>
+    <caption>擬ポテンシャル</caption>
+    <thead><tr><th>オプション</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td class="m"><b>--pseudo-dir</b> &lt;path&gt;</td><td>ローカルの UPF ディレクトリ（既定 <code>~/.ezcal/pseudo</code>）</td></tr>
+      <tr><td class="m"><b>--pseudo</b> Fe=Fe.pbe-spn-kjpaw_psl.1.0.0.UPF</td><td>元素ごとにファイルを固定する。カンマ区切りで複数可</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="tw">
+  <table>
+    <caption>バンド・DOS・図</caption>
+    <thead><tr><th>オプション</th><th>既定</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td class="m"><b>--line-density</b> &lt;float&gt;</td><td class="def">25</td><td>バンド経路の k 点密度（1/Å あたり）</td></tr>
+      <tr><td class="m"><b>--emin</b> / <b>--emax</b></td><td class="def">-10 / 10</td><td>図のエネルギー窓（基準点からの eV）</td></tr>
+      <tr><td class="m"><b>--plot</b></td><td class="def">matplotlib</td><td>matplotlib / plotly / both / none</td></tr>
+      <tr><td class="m"><b>--dpi</b> &lt;int&gt;</td><td class="def">200</td><td>PNG の解像度</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="tw">
+  <table>
+    <caption>実行方法</caption>
+    <thead><tr><th>オプション</th><th>既定</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td class="m"><b>-n, --np</b> &lt;int&gt;</td><td class="def">8</td><td>MPI プロセス数</td></tr>
+      <tr><td class="m"><b>--scheduler</b></td><td class="def">local</td><td>local / qsub</td></tr>
+      <tr><td class="m"><b>--qsub</b></td><td class="def">—</td><td><code>--scheduler qsub</code> の短縮形</td></tr>
+      <tr><td class="m"><b>--qsub-wait</b></td><td class="def">off</td><td>投入後ジョブ終了まで待ち、次の段へ進む</td></tr>
+      <tr><td class="m"><b>--qsub-script</b> &lt;path&gt;</td><td class="def">run_qe.sh</td><td>ジョブスクリプトのテンプレート</td></tr>
+      <tr><td class="m"><b>--queue</b> / <b>--walltime</b> / <b>--nodes</b> / <b>--ppn</b></td><td class="def">— / 24:00:00 / 1 / --np</td><td>PBS 用の資源指定</td></tr>
+      <tr><td class="m"><b>--dry-run</b></td><td class="def">off</td><td>入力とジョブスクリプトだけ書いて何も実行しない</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="tw">
+  <table>
+    <caption>ワークフロー・出力・その他</caption>
+    <thead><tr><th>オプション</th><th>既定</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td class="m"><b>--only</b></td><td class="def">off</td><td>前段を飛ばしてこの段だけ実行</td></tr>
+      <tr><td class="m"><b>--skip</b> nscf,dos</td><td class="def">—</td><td>飛ばす段をカンマ区切りで</td></tr>
+      <tr><td class="m"><b>--relax</b> / <b>--no-relax</b></td><td class="def">--relax</td><td>auto で最初に構造最適化するか</td></tr>
+      <tr><td class="m"><b>--fixed-cell</b></td><td class="def">off</td><td>auto の最適化を vc-relax ではなく relax にする</td></tr>
+      <tr><td class="m"><b>--primitive</b> / <b>--as-is</b></td><td class="def">--primitive</td><td>最初に primitive cell へ標準化するか</td></tr>
+      <tr><td class="m"><b>-o, --outdir</b> &lt;path&gt;</td><td class="def">ezcal_out</td><td>結果のルート</td></tr>
+      <tr><td class="m"><b>--name</b> &lt;str&gt;</td><td class="def">式_タスク名</td><td>実行ディレクトリ名</td></tr>
+      <tr><td class="m"><b>--keep-wfc</b></td><td class="def">off</td><td>波動関数ファイルを消さずに残す</td></tr>
+      <tr><td class="m"><b>--engine</b></td><td class="def">qe</td><td>qe / vasp / mlip</td></tr>
+      <tr><td class="m"><b>-c, --config</b> &lt;path&gt;</td><td class="def">—</td><td>設定ファイルを明示</td></tr>
+      <tr><td class="m"><b>--set</b> key=value</td><td class="def">—</td><td>任意の設定キーを上書き。複数回指定可</td></tr>
+      <tr><td class="m"><b>--mp-api-key</b></td><td class="def">$MP_API_KEY</td><td>Materials Project の API キー</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <b>専用オプションが無い設定も全部触れます</b>
+    <p><code>--set</code> は <code>qe_config.yaml</code> のどのキーでも受け付けます。値は YAML として解釈されるので、
+       数値・真偽値・リストがそのまま書けます。</p>
+  </div>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal scf Si.cif --set dft.mixing_beta=0.2 --set dft.diagonalization=cg \
+      --set dft.koffset='[1,1,1]' --set relax.cell_dofree=ibrav</b></pre></div>
+</section>
+
+<!-- ========================= 06 ========================= -->
+<section id="conf" data-lv="a">
+  <div class="s-head"><span class="s-num">06</span><h2>設定ファイル qe_config.yaml</h2><span class="badge a">応用</span></div>
+  <p class="lead">毎回同じオプションを打っているなら、設定ファイルに移してください。</p>
+
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal config init</b>              <span class="c"># カレントに雛形（全キーにコメント付き）</span>
+<span class="p">$</span> <b>ezcal config init --user</b>       <span class="c"># ~/.config/ezcal/qe_config.yaml</span>
+<span class="p">$</span> <b>ezcal config show</b>              <span class="c"># いま効いている値と読み込み元</span>
+<span class="p">$</span> <b>ezcal config show --flat</b>       <span class="c"># 1 行 1 キー（grep しやすい）</span></pre></div>
+
+  <h3>優先順位</h3>
+  <p>後から読んだものが勝ちます。実際に効いた設定は各実行ディレクトリに <code>qe_config.used.yaml</code> として保存されるので、後から再現できます。</p>
+  <div class="flow">
+    <div class="step"><span class="t">パッケージ既定</span><span class="s">data/default_config.yaml</span></div>
+    <span class="arr">→</span>
+    <div class="step"><span class="t">~/.config/ezcal/</span><span class="s">個人の既定</span></div>
+    <span class="arr">→</span>
+    <div class="step"><span class="t">./qe_config.yaml</span><span class="s">プロジェクトの既定</span></div>
+    <span class="arr">→</span>
+    <div class="step"><span class="t">--config</span><span class="s">明示指定</span></div>
+    <span class="arr">→</span>
+    <div class="step last"><span class="t">CLI オプション</span><span class="s">--ecutwfc / --set</span></div>
+  </div>
+
+  <h3>キー一覧</h3>
+  <div class="tw">
+  <table>
+    <caption>qe — Quantum ESPRESSO の場所と擬ポテンシャル</caption>
+    <thead><tr><th>キー</th><th>既定</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td class="m">qe.bin_dir</td><td class="def">~/repos/q-e/bin</td><td>実行ファイルを探すディレクトリ</td></tr>
+      <tr><td class="m">qe.commands.pw / dos / projwfc / bands / pp</td><td class="def">null</td><td>個別に絶対パス指定。null なら bin_dir から</td></tr>
+      <tr><td class="m">qe.prefix</td><td class="def">ezcal</td><td>QE の prefix（outdir 内のファイル名）</td></tr>
+      <tr><td class="m">qe.pseudo_dir</td><td class="def">~/.ezcal/pseudo</td><td>ローカル UPF ライブラリ</td></tr>
+      <tr><td class="m">qe.pseudo_preference</td><td class="def">[kjpaw, rrkjus, paw, us, nc]</td><td>同じ元素に複数ある場合の優先順</td></tr>
+      <tr><td class="m">qe.pseudo_download</td><td class="def">true</td><td>無ければ自動ダウンロードする</td></tr>
+      <tr><td class="m">qe.pseudo_source</td><td class="def">pseudopotentials.quantum-espresso.org</td><td>ダウンロード元</td></tr>
+      <tr><td class="m">qe.pseudo_map</td><td class="def">—</td><td><code>{Fe: Fe.pbe-spn-kjpaw_psl.1.0.0.UPF}</code> のように固定</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="tw">
+  <table>
+    <caption>dft — 電子状態計算</caption>
+    <thead><tr><th>キー</th><th>既定</th><th>キー</th><th>既定</th></tr></thead>
+    <tbody>
+      <tr><td class="m">dft.functional</td><td class="def">pbe</td><td class="m">dft.nspin</td><td class="def">1</td></tr>
+      <tr><td class="m">dft.input_dft</td><td class="def">null</td><td class="m">dft.starting_magnetization</td><td class="def">{}</td></tr>
+      <tr><td class="m">dft.magnetic_sublattices</td><td class="def">{}</td><td class="m">dft.hubbard_projection</td><td class="def">ortho-atomic</td></tr>
+      <tr><td class="m">dft.ecutwfc / ecutrho</td><td class="def">null（自動）</td><td class="m">dft.tot_magnetization</td><td class="def">null</td></tr>
+      <tr><td class="m">dft.ecut_safety</td><td class="def">1.0</td><td class="m">dft.nbnd</td><td class="def">null</td></tr>
+      <tr><td class="m">dft.kmesh</td><td class="def">null（自動）</td><td class="m">dft.hubbard_u</td><td class="def">{}</td></tr>
+      <tr><td class="m">dft.kspacing</td><td class="def">0.25</td><td class="m">dft.vdw_corr</td><td class="def">null</td></tr>
+      <tr><td class="m">dft.koffset</td><td class="def">[0, 0, 0]</td><td class="m">dft.assume_isolated</td><td class="def">null</td></tr>
+      <tr><td class="m">dft.occupations</td><td class="def">smearing</td><td class="m">dft.nosym</td><td class="def">false</td></tr>
+      <tr><td class="m">dft.smearing / degauss</td><td class="def">mv / 0.02</td><td class="m">dft.tstress / tprnfor</td><td class="def">true / true</td></tr>
+      <tr><td class="m">dft.conv_thr</td><td class="def">1e-8</td><td class="m">dft.mixing_beta / mixing_mode</td><td class="def">0.4 / plain</td></tr>
+      <tr><td class="m">dft.electron_maxstep</td><td class="def">200</td><td class="m">dft.diagonalization</td><td class="def">david</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="margin-top:.9rem"><code>dft.magnetic_sublattices</code> は
+     <code>{Ni: [2.0, -2.0]}</code> の形で、その元素のサイトを出現順に副格子へ割り当てます
+     （<code>--afm</code> / <code>--magmom Ni=2.0/-2.0</code> がこれを書き込みます）。
+     設定すると <code>dft.nspin</code> は自動で 2 になり、
+     <code>dft.starting_magnetization</code> がラベル単位（<code>Ni1</code>, <code>Ni2</code>）に展開されます。</p>
+
+  <div class="tw">
+  <table>
+    <caption>relax / nscf / bands / dos / output</caption>
+    <thead><tr><th>キー</th><th>既定</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td class="m">relax.etot_conv_thr</td><td class="def">1e-5</td><td>全エネルギー収束（Ry）</td></tr>
+      <tr><td class="m">relax.forc_conv_thr</td><td class="def">1e-4</td><td>力の収束（Ry/Bohr）</td></tr>
+      <tr><td class="m">relax.press_conv_thr</td><td class="def">0.5</td><td>圧力の収束（<b>kbar</b>、QE の単位）</td></tr>
+      <tr><td class="m">relax.press</td><td class="def">0.0</td><td>目標圧力（kbar）</td></tr>
+      <tr><td class="m">relax.ion_dynamics / cell_dynamics</td><td class="def">bfgs / bfgs</td><td>最適化アルゴリズム</td></tr>
+      <tr><td class="m">relax.cell_dofree</td><td class="def">all</td><td>セルの自由度（ibrav, xyz, volume …）</td></tr>
+      <tr><td class="m">relax.nstep</td><td class="def">100</td><td>最大イオンステップ数</td></tr>
+      <tr><td class="m">nscf.kmesh_scale</td><td class="def">2</td><td>nscf のメッシュ＝scf × この値</td></tr>
+      <tr><td class="m">nscf.occupations</td><td class="def">tetrahedra</td><td>nscf 段の占有数</td></tr>
+      <tr><td class="m">nscf.nbnd_extra_ratio</td><td class="def">0.3</td><td>空バンドの割合</td></tr>
+      <tr><td class="m">nscf.conv_thr_scale</td><td class="def">0.1</td><td>nscf の閾値＝scf × この値</td></tr>
+      <tr><td class="m">bands.line_density</td><td class="def">25</td><td>経路の k 点密度（1/Å あたり）</td></tr>
+      <tr><td class="m">bands.min_points_per_segment</td><td class="def">6</td><td>1 区間の最小点数</td></tr>
+      <tr><td class="m">bands.nbnd_extra_ratio</td><td class="def">0.4</td><td>空バンドの割合</td></tr>
+      <tr><td class="m">bands.symprec</td><td class="def">1e-5</td><td>seekpath の対称性判定精度</td></tr>
+      <tr><td class="m">bands.emin / emax</td><td class="def">null</td><td>図の窓（基準点からの eV）</td></tr>
+      <tr><td class="m">dos.degauss</td><td class="def">0.01</td><td>dos.x の広がり（<b>Ry</b>）</td></tr>
+      <tr><td class="m">dos.deltae</td><td class="def">0.02</td><td>エネルギー格子の刻み（<b>eV</b>）</td></tr>
+      <tr><td class="m">dos.emin / emax</td><td class="def">null</td><td>dos.x 自身の計算範囲（絶対 eV。図の窓とは別）</td></tr>
+      <tr><td class="m">dos.pdos</td><td class="def">true</td><td>projwfc.x も走らせて PDOS を出す</td></tr>
+      <tr><td class="m">output.dir</td><td class="def">ezcal_out</td><td>結果のルート</td></tr>
+      <tr><td class="m">output.plot</td><td class="def">[matplotlib]</td><td>matplotlib / plotly / both / none</td></tr>
+      <tr><td class="m">output.dpi</td><td class="def">200</td><td>PNG 解像度</td></tr>
+      <tr><td class="m">output.keep_wavefunctions</td><td class="def">false</td><td>成功後に波動関数ファイルを消すか</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="tw">
+  <table>
+    <caption>vasp — VASP と mock-vasp</caption>
+    <thead><tr><th>キー</th><th>既定</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td class="m">vasp.command</td><td class="def">vasp_std</td><td>実行ファイル。<code>mock-vasp</code> にすると記録済み計算を再生する</td></tr>
+      <tr><td class="m">vasp.incar</td><td class="def">{}</td><td>INCAR タグの追加・上書き。<code>null</code> を渡すとそのタグを削除</td></tr>
+      <tr><td class="m">vasp.incar_mode</td><td class="def">merge</td><td>merge / replace（replace なら vasp.incar がそのまま INCAR）</td></tr>
+      <tr><td class="m">vasp.kpoints_style</td><td class="def">gamma</td><td>gamma / monkhorst</td></tr>
+      <tr><td class="m">vasp.potcar_dir</td><td class="def">null</td><td>ライセンス版 POTCAR ライブラリ</td></tr>
+      <tr><td class="m">vasp.potcar_functional</td><td class="def">PBE</td><td>pymatgen に渡す汎関数名</td></tr>
+      <tr><td class="m">vasp.potcar_mode</td><td class="def">auto</td><td>auto / library / placeholder</td></tr>
+      <tr><td class="m">vasp.potcar_map</td><td class="def">{}</td><td><code>{Si: Si_sv}</code> 元素 → POTCAR ディレクトリ名</td></tr>
+      <tr><td class="m">vasp.magmom_default</td><td class="def">1.0</td><td>値を指定しなかったサイトの MAGMOM（μ<sub>B</sub>）</td></tr>
+      <tr><td class="m">vasp.mock.registry</td><td class="def">null</td><td>記録済み計算のディレクトリ</td></tr>
+      <tr><td class="m">vasp.mock.vasp_cmd</td><td class="def">null</td><td>未登録の入力を実際に計算して記録する実 VASP</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="tw">
+  <table>
+    <caption>run — 実行方法</caption>
+    <thead><tr><th>キー</th><th>既定</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td class="m">run.scheduler</td><td class="def">local</td><td>local / qsub</td></tr>
+      <tr><td class="m">run.nproc</td><td class="def">8</td><td>MPI プロセス数</td></tr>
+      <tr><td class="m">run.mpirun / mpirun_flags</td><td class="def">mpirun / []</td><td>例 <code>["--bind-to","core"]</code></td></tr>
+      <tr><td class="m">run.omp_num_threads</td><td class="def">1</td><td>OMP_NUM_THREADS</td></tr>
+      <tr><td class="m">run.timeout</td><td class="def">null</td><td>1 段あたりの制限時間（秒）</td></tr>
+      <tr><td class="m">run.dry_run</td><td class="def">false</td><td>書くだけで実行しない</td></tr>
+      <tr><td class="m">run.qsub.script</td><td class="def">run_qe.sh</td><td>テンプレート</td></tr>
+      <tr><td class="m">run.qsub.submit_cmd / status_cmd</td><td class="def">qsub / qstat</td><td>投入・状態確認コマンド</td></tr>
+      <tr><td class="m">run.qsub.queue / walltime</td><td class="def">null / 24:00:00</td><td>キューと実行時間</td></tr>
+      <tr><td class="m">run.qsub.nodes / ppn</td><td class="def">1 / null</td><td>ppn が null なら run.nproc を使う</td></tr>
+      <tr><td class="m">run.qsub.job_prefix</td><td class="def">ezcal</td><td>ジョブ名の接頭辞</td></tr>
+      <tr><td class="m">run.qsub.wait / poll_interval</td><td class="def">false / 30</td><td>終了を待つか、確認間隔（秒）</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>書き方の例</h4>
+  <div class="cmd"><pre><span class="c"># qe_config.yaml — 研究室のクラスタ用</span>
+<b>qe:</b>
+  <b>bin_dir:</b> /opt/qe-7.5/bin
+  <b>pseudo_dir:</b> /work/shared/pseudo
+<b>run:</b>
+  <b>scheduler:</b> qsub
+  <b>nproc:</b> 32
+  <b>qsub:</b>
+    <b>queue:</b> smallq
+    <b>walltime:</b> "12:00:00"
+    <b>wait:</b> true
+<b>dft:</b>
+  <b>kspacing:</b> 0.18
+  <b>conv_thr:</b> 1.0e-9
+<b>output:</b>
+  <b>plot:</b> [both]</pre></div>
+</section>
+
+<!-- ========================= 07 ========================= -->
+<section id="qsub" data-lv="a">
+  <div class="s-head"><span class="s-num">07</span><h2>qsub で流す</h2><span class="badge a">応用</span></div>
+  <p class="lead">スケジューラの違いは <code>scheduler.py</code> だけが知っています。使う側はオプションを 1 つ足すだけです。</p>
+
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal auto Si.cif --qsub --queue batch --np 32 --qsub-wait</b>
+<span class="p">$</span> <b>ezcal scf Si.cif --qsub --dry-run</b>     <span class="c"># 投入されるスクリプトを確認するだけ</span></pre></div>
+
+  <h3>テンプレートの探索順</h3>
+  <p><code>./run_qe.sh</code> → <code>run.qsub.script</code> で指定したパス → パッケージ同梱、の順に探します。
+     module load などサイト固有の設定はテンプレート側に書き足してください。</p>
+  <div class="cmd"><pre><span class="c">#!/bin/bash</span>
+<span class="c">#PBS -N {{JOB_NAME}}</span>
+<span class="c">#PBS -l nodes={{NODES}}:ppn={{PPN}}</span>
+<span class="c">#PBS -l walltime={{WALLTIME}}</span>
+<span class="c">#PBS -q {{QUEUE}}</span>
+<span class="c">#PBS -j oe</span>
+
+cd "${PBS_O_WORKDIR:-{{WORKDIR}}}" || exit 1
+export OMP_NUM_THREADS={{OMP_NUM_THREADS}}
+
+<span class="c"># --- ここにサイト固有の設定を書く ---</span>
+<span class="c"># module load openmpi</span>
+<span class="c"># source ~/.venv/ezcalenv312/bin/activate</span>
+
+<span class="c"># --- ezcal が生成した実行行がここに入る ---</span>
+{{COMMANDS}}</pre></div>
+
+  <div class="tw">
+  <table>
+    <caption>置換されるプレースホルダ</caption>
+    <thead><tr><th>名前</th><th>入る値</th></tr></thead>
+    <tbody>
+      <tr><td class="m">JOB_NAME</td><td><code>ezcal_scf</code> のように job_prefix + 段の名前</td></tr>
+      <tr><td class="m">NODES / PPN / NPROC</td><td>資源指定。PPN が null なら run.nproc</td></tr>
+      <tr><td class="m">QUEUE / WALLTIME</td><td>キュー名と実行時間。QUEUE が空なら <code>#PBS -q</code> 行ごと削除される</td></tr>
+      <tr><td class="m">WORKDIR</td><td>その段の作業ディレクトリ（絶対パス）</td></tr>
+      <tr><td class="m">MPIRUN / OMP_NUM_THREADS</td><td>run 設定から</td></tr>
+      <tr><td class="m">COMMANDS</td><td>実行行。dos の段なら dos.x と projwfc.x が 2 行入る</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="warnbox">
+    <b>複数段のワークフローには --qsub-wait が要ります</b>
+    <p>段の間で構造や電荷密度を受け渡す必要があるため、<code>--qsub-wait</code> を付けないと
+       <code>auto</code> は 1 段目を投入した時点で止まります（その旨をメッセージで表示します）。
+       単発の <code>scf</code> を投げっぱなしにするだけなら不要です。</p>
+  </div>
+
+  <h3>Slurm で使いたい場合</h3>
+  <p>テンプレート方式は共通なので、<code>#SBATCH</code> 版のテンプレートを用意して投入コマンドを変えるだけで動きます。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal auto Si.cif --scheduler qsub --qsub-script ./run_slurm.sh \
+      --set run.qsub.submit_cmd=sbatch --set run.qsub.status_cmd=squeue</b></pre></div>
+</section>
+
+<!-- ========================= 08 ========================= -->
+<section id="eng" data-lv="a">
+  <div class="s-head"><span class="s-num">08</span><h2>エンジンを切り替える</h2><span class="badge a">応用</span></div>
+  <p class="lead">CLI・設定・ワークフロー・作図は <code>CalcResult</code> しか見ないので、計算コードは差し替えられます。</p>
+
+  <h3>SevenNet（機械学習ポテンシャル）</h3>
+  <p>エネルギー・力・応力・構造最適化のみ。電子状態は扱えないので、bands / dos / nscf を頼まれたら
+     黙って別物を出さずに理由を返します。DFT の前段としての粗い緩和に向いています。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal vc-relax Si.cif --engine mlip</b>
+<span class="p">$</span> <b>ezcal auto Si.cif --engine mlip</b>                        <span class="c"># 電子状態の段は自動でスキップ</span>
+<span class="p">$</span> <b>ezcal scf Si.cif --engine mlip --set mlip.model=7net-l3i5</b>
+<span class="p">$</span> <b>ezcal bands Si.cif --engine mlip</b>
+<span class="c">  note: engine 'mlip' cannot run 'bands' (it supports: scf, relax, vc-relax)</span></pre></div>
+  <div class="tw">
+  <table>
+    <thead><tr><th>キー</th><th>既定</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td class="m">mlip.backend</td><td class="def">sevennet</td><td>将来 mace / chgnet を足す口も用意済み</td></tr>
+      <tr><td class="m">mlip.model</td><td class="def">7net-0</td><td>チェックポイント名またはパス</td></tr>
+      <tr><td class="m">mlip.device</td><td class="def">cpu</td><td>cpu / cuda</td></tr>
+      <tr><td class="m">mlip.fmax / steps</td><td class="def">0.02 / 300</td><td>力の閾値（eV/Å）と最大ステップ</td></tr>
+      <tr><td class="m">mlip.optimizer</td><td class="def">FIRE</td><td>FIRE / BFGS / LBFGS</td></tr>
+      <tr><td class="m">mlip.filter</td><td class="def">frechet</td><td>vc-relax のセルフィルタ（frechet / exp / unit）</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="margin-top:.9rem">検証では SevenNet の格子定数が DFT と 0.15 % 以内で一致しました（Si 5.463 vs 5.456 Å、MgO 4.255 vs 4.249 Å）。</p>
+
+  <h3>VASP</h3>
+  <p>入力生成（INCAR / POSCAR / KPOINTS / POTCAR）、実行、<code>vasprun.xml</code> と
+     <code>OUTCAR</code> の解析、バンド・DOS・PDOS の抽出まで通っています。
+     実行ファイルは <code>vasp.command</code> が指すものなら何でもよく、
+     <b>ライセンスが無くても aiida-vasp の <code>mock-vasp</code> で全経路を動かせます</b>。</p>
+
+  <h4>mock-vasp で動かす</h4>
+  <p><code>mock-vasp</code> は INCAR / KPOINTS / POSCAR をパースしてハッシュを取り、
+     レジストリに一致する計算があればその出力を複製して返す疑似 VASP です。
+     再生されるのは実際の VASP 出力なので、数字は「その入力に対する本物の VASP の答え」です。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>uv pip install aiida-vasp</b>          <span class="c"># mock-vasp が入る</span>
+
+<span class="p">$</span> <b>ezcal scf POSCAR --engine vasp --as-is \
+      --set vasp.command=mock-vasp \
+      --set vasp.mock.registry=./vasp_mock_registry</b>
+
+<span class="p">$</span> <b>ezcal vasp registry --registry ./vasp_mock_registry</b>   <span class="c"># 中身を見る</span>
+<span class="p">$</span> <b>ezcal vasp hash ./runs/Si_vasp/00_scf</b>                 <span class="c"># 不一致の調査</span></pre></div>
+  <div class="out">┃ entry              ┃ hash                             ┃
+│ si-simple/calc-000 │ 32740fbd728a1e9863e75303b43f4616 │
+
+<span class="cm"># 実行すると report.md / summary.json に出所が残る</span>
+<b>[scf] mock-vasp replayed recorded VASP output from …/si-simple/calc-000
+      (the inputs hash-matched that entry)</b></div>
+
+  <h4>記録して配る</h4>
+  <p>実 VASP のあるマシンで計算を記録し、レジストリを配れば、ライセンスの無いマシンでも
+     同じ入力を ezcal から再生できます。<code>vasp.mock.vasp_cmd</code> に実 VASP を書いておくと、
+     未登録の入力は実行して自動で登録します。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal vasp record ./runs/Si_vasp/00_scf --name si-scf/calc-000 --registry ./reg</b></pre></div>
+  <div class="warnbox">
+    <b>ハッシュはパース後の値で取られます</b>
+    <p><code>ENCUT = 200</code>(整数) と <code>ENCUT = 200.0</code>(実数) は別物として扱われます。
+       ezcal が INCAR と KPOINTS を pymatgen 任せにせず自前で書いているのはこのためです。
+       記録済みの入力を厳密に再現したいときは <code>vasp.incar_mode: replace</code> を使ってください。</p>
+  </div>
+
+  <h4>実 VASP で動かす</h4>
+  <ul class="plain">
+    <li><b>1.</b> POTCAR ライブラリを用意し <code>pmg config -p &lt;PSP dir&gt; &lt;target&gt;</code>、<code>vasp.potcar_dir</code> を設定</li>
+    <li><b>2.</b> <code>vasp.command</code> に MPI 実行ファイルを設定。これだけです</li>
+    <li><b>POTCAR は勝手に捏造しません。</b><code>potcar_mode: auto</code> は、ライブラリがあればそこから生成し、
+        無くてコマンドが mock のときだけ「これは擬ポテンシャルではない」と明記したプレースホルダを書きます。
+        実 VASP でライブラリが無ければエラーで止まります。</li>
+  </ul>
+
+  <h4>汎用オプションの対応</h4>
+  <div class="tw">
+  <table>
+    <thead><tr><th>ezcal</th><th>INCAR</th></tr></thead>
+    <tbody>
+      <tr><td class="m">--ecutwfc (Ry)</td><td class="m">ENCUT (eV)</td></tr>
+      <tr><td class="m">--conv-thr (Ry)</td><td class="m">EDIFF (eV) <span class="d">既定は VASP 流の 1e-6。指定したときだけ換算値が入る</span></td></tr>
+      <tr><td class="m">--degauss (Ry)</td><td class="m">SIGMA (eV)</td></tr>
+      <tr><td class="m">--occupations / --smearing</td><td class="m">ISMEAR</td></tr>
+      <tr><td class="m">--nbnd</td><td class="m">NBANDS</td></tr>
+      <tr><td class="m">--spin / --magmom / --afm</td><td class="m">ISPIN + サイトごとの MAGMOM <span class="d">値は換算せずそのまま（QE は価電子数比、VASP は μ<sub>B</sub>）</span></td></tr>
+      <tr><td class="m">--hubbard-u</td><td class="m">LDAU / LDAUTYPE / LDAUL / LDAUU / LDAUJ / LMAXMIX</td></tr>
+      <tr><td class="m">--vdw grimme-d3</td><td class="m">IVDW</td></tr>
+      <tr><td class="m">--kmesh / --kspacing</td><td class="m">KPOINTS（Gamma または Monkhorst）</td></tr>
+      <tr><td class="m">bands</td><td class="m">KPOINTS explicit（seekpath の経路をそのまま）</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="margin-top:.9rem">DOS・PDOS・バンドの作図は QE と同じ経路を通るので、図も CSV も同じ形式で出ます。</p>
+
+  <h3>自分の計算コードを足す</h3>
+  <div class="cmd"><pre><span class="c"># ezcal/engines/mycode.py</span>
+<b>from</b> ezcal.engines.base <b>import</b> CalcResult, Engine
+
+<b>class</b> MyEngine(Engine):
+    name = <b>"mycode"</b>
+    supported = (<b>"scf"</b>, <b>"relax"</b>)          <span class="c"># 対応外のタスクは自動で拒否される</span>
+
+    <b>def</b> check(self):                       <span class="c"># 実行前チェック</span>
+        <b>return</b> []                          <span class="c"># 問題があれば文字列のリスト</span>
+
+    <b>def</b> run(self, structure, task, workdir, prev=None, **kwargs):
+        <span class="c"># 1. 入力を書く</span>
+        <span class="c"># 2. self.scheduler.execute(Stage(...))  ← local/qsub の違いは意識しない</span>
+        <span class="c"># 3. 出力を解析して CalcResult に詰める</span>
+        <b>return</b> CalcResult(task=task, engine=self.name, workdir=workdir, ok=True)
+
+<span class="c"># ezcal/engines/__init__.py に 1 行</span>
+register(<b>"mycode"</b>, <b>lambda</b> config, scheduler: MyEngine(config, scheduler))</pre></div>
+  <p style="margin-top:.8rem">新しいタスクを足すときは <code>workflows.CHAINS</code> に前段を書き、エンジンの <code>supported</code> に追加、
+     <code>cli.TASKS</code> に 1 語足すだけです。</p>
+</section>
+
+<!-- ========================= 09 ========================= -->
+<section id="api" data-lv="a">
+  <div class="s-head"><span class="s-num">09</span><h2>Python API</h2><span class="badge a">応用</span></div>
+  <p class="lead">CLI がやっていることは、そのままスクリプトからも呼べます。スクリーニングに便利です。</p>
+
+  <div class="cmd"><pre><b>from</b> pathlib <b>import</b> Path
+<b>from</b> ezcal.config <b>import</b> load_config
+<b>from</b> ezcal.structures <b>import</b> read_structure, standardize, structure_info, band_path
+<b>from</b> ezcal.workflows <b>import</b> Workflow
+
+structure = standardize(read_structure(<b>"Si.cif"</b>), primitive=True)
+<b>print</b>(structure_info(structure))
+
+cfg = load_config()
+cfg.apply_overrides({
+    <b>"run.nproc"</b>: 8,
+    <b>"dft.kmesh"</b>: [6, 6, 6],
+    <b>"dft.conv_thr"</b>: 1e-6,
+    <b>"output.plot"</b>: [<b>"both"</b>],
+})
+
+wf = Workflow(cfg, structure, Path(<b>"out/Si"</b>), label=<b>"Si"</b>, log=<b>print</b>)
+result = wf.run(<b>"auto"</b>)
+
+<b>print</b>(result.ok, result.steps[<b>"bands"</b>].band_gap)
+<b>for</b> name <b>in</b> result.order:
+    step = result.steps[name]
+    <b>print</b>(name, step.energy, step.fermi_energy, step.walltime)</pre></div>
+
+  <h4>スクリーニングの例</h4>
+  <div class="cmd"><pre>ids = [<b>"mp-149"</b>, <b>"mp-1265"</b>, <b>"mp-2657"</b>]
+rows = []
+<b>for</b> mid <b>in</b> ids:
+    s = standardize(read_structure(mid, api_key=KEY))
+    cfg = load_config(); cfg.apply_overrides({<b>"run.nproc"</b>: 8, <b>"output.plot"</b>: [<b>"none"</b>]})
+    r = Workflow(cfg, s, Path(<b>f"screen/{mid}"</b>)).run(<b>"dos"</b>)
+    rows.append((mid, r.steps[<b>"nscf"</b>].band_gap, r.steps[<b>"scf"</b>].energy_per_atom))</pre></div>
+
+  <div class="tw">
+  <table>
+    <caption>よく使うモジュール</caption>
+    <thead><tr><th>モジュール</th><th>中身</th></tr></thead>
+    <tbody>
+      <tr><td class="m">ezcal.config</td><td><code>load_config</code>, <code>Config.get/set/apply_overrides</code></td></tr>
+      <tr><td class="m">ezcal.structures</td><td><code>read_structure</code>, <code>standardize</code>, <code>structure_info</code>, <code>auto_kmesh</code>, <code>band_path</code></td></tr>
+      <tr><td class="m">ezcal.pseudo</td><td><code>PseudoManager</code>, <code>candidates</code>, <code>parse_upf</code>, <code>suggest_cutoffs</code></td></tr>
+      <tr><td class="m">ezcal.workflows</td><td><code>Workflow</code>, <code>CHAINS</code>, <code>render_report</code></td></tr>
+      <tr><td class="m">ezcal.plotting</td><td><code>plot_bands</code>, <code>plot_dos</code>, <code>plot_bands_dos</code>, <code>export_bands_csv</code></td></tr>
+      <tr><td class="m">ezcal.engines</td><td><code>get_engine</code>, <code>register</code>, <code>CalcResult</code></td></tr>
+      <tr><td class="m">ezcal.scheduler</td><td><code>get_scheduler</code>, <code>Command</code>, <code>Stage</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="margin-top:.9rem">動く例は <code>notebooks/ezcal_demo.ipynb</code> にあります（実行済み版も同梱）。
+     Materials Project の API キーは <code>getpass</code> で入力する方式で、ファイルには残りません。</p>
+</section>
+
+<!-- ========================= 10 ========================= -->
+<section id="trouble" data-lv="b">
+  <div class="s-head"><span class="s-num">10</span><h2>困ったときは</h2><span class="badge b">基本</span></div>
+  <p class="lead">実際に出るメッセージと、その対処。</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th style="width:38%">メッセージ</th><th>原因と対処</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="m">executable not found: …/pw.x</td>
+        <td>QE の場所が違います。<code>ezcal config init</code> して <code>qe.bin_dir</code> を直すか、
+            <code>--set qe.commands.pw=/path/to/pw.x</code> を付けてください。</td></tr>
+      <tr>
+        <td class="m">no PBE pseudopotential known for X</td>
+        <td>索引にその元素の PBE 版がありません。UPF を <code>~/.ezcal/pseudo</code> に置いて
+            <code>--pseudo X=&lt;file&gt;</code> で固定してください。</td></tr>
+      <tr>
+        <td class="m">could not download …UPF</td>
+        <td>ネットワークが無い環境です。別マシンで <code>ezcal pseudo fetch</code> して
+            <code>~/.ezcal/pseudo</code> ごと持ち込み、<code>qe.pseudo_download: false</code> にします。</td></tr>
+      <tr>
+        <td class="m">a Materials Project API key is required</td>
+        <td><code>--mp-api-key</code> を付けるか <code>export MP_API_KEY=…</code> を設定してください。</td></tr>
+      <tr>
+        <td class="m">'qsub' is not available on this machine</td>
+        <td>ジョブスクリプトは書かれています。手で投入するか <code>--scheduler local</code> に。</td></tr>
+      <tr>
+        <td class="m">engine 'mlip' cannot run 'bands'</td>
+        <td>機械学習ポテンシャルに電子状態はありません。<code>--engine qe</code> を使ってください。</td></tr>
+      <tr>
+        <td class="m">step 'scf' failed / convergence NOT achieved</td>
+        <td>SCF が収束していません。<code>--set dft.mixing_beta=0.2</code>、金属なら
+            <code>--set dft.mixing_mode=local-TF</code>、<code>--degauss</code> を大きめに。
+            詳細は該当段の <code>scf.out</code> に全部残っています。</td></tr>
+      <tr>
+        <td class="m">The mock-vasp code could not perform a clean run</td>
+        <td>入力のハッシュがレジストリに無いか、INCAR/KPOINTS/POSCAR が壊れています。
+            <code>ezcal vasp hash</code> で自分の入力と記録側のハッシュを比べてください。
+            整数と実数の違い（<code>200</code> と <code>200.0</code>）でも別物になります。</td></tr>
+      <tr>
+        <td class="m">no POTCAR available</td>
+        <td>実 VASP を指定しているのに <code>vasp.potcar_dir</code> がありません。ライブラリを設定するか、
+            <code>vasp.command: mock-vasp</code> で再生モードにしてください。</td></tr>
+      <tr>
+        <td class="m">N magnetic sublattices were asked for X but the cell has only M X site(s)</td>
+        <td>セルが磁気秩序を収められません。磁気単位胞（副格子の数だけサイトがあるセル）を
+            用意してください。primitive cell へ縮約されるのを避けたい場合は <code>--as-is</code> を明示します
+            （<code>--afm</code> 使用時は自動）。</td></tr>
+      <tr>
+        <td class="m">species label 'Xxxx' is longer than 3 characters</td>
+        <td>pw.x の species ラベルは 3 文字までです。副格子は自動で <code>Ni1</code> 形式になるので、
+            通常このエラーは自分でラベルを付けたときだけ出ます。</td></tr>
+      <tr>
+        <td class="m">raw_data.json not found</td>
+        <td><code>ezcal plot</code> は計算済みの実行ディレクトリを指す必要があります。
+            <code>--plot none</code> で回した場合は図の生データが残りません。</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <b>pw.x が落ちたときは助言が付きます</b>
+    <p>ezcal は QE の既知のエラー（対角化の破綻、SCF 不収束、G ベクトル不足など）を見分けて、
+       次に試すことを <code>hint:</code> として表示します。エラー本文もレポートに残ります。</p>
+  </div>
+
+  <h3>結果がおかしいと感じたら</h3>
+  <ul class="plain">
+    <li><b>まずカットオフと k 点を上げて再現するか見る。</b>ギャップや格子定数のずれはほぼこれです。自動値を使えば安全側です。</li>
+    <li><b>金属なのにギャップが出る／絶縁体なのに金属と出る。</b>価電子数が想定と違う可能性があります。<code>summary.json</code> の <code>nelec</code> と <code>nbnd</code> を確認してください。</li>
+    <li><b>磁性が消える。</b><code>--magmom</code> の初期値を大きめ（0.6〜1.0）にし、k 点を増やしてください。
+        反強磁性が強磁性に落ちてしまう場合は <code>--afm Ni=2.0</code> のように初期値を大きく取り、
+        <code>--set dft.mixing_beta=0.3</code> で混合を弱めます。</li>
+    <li><b>反強磁性なのに |M| が 0 になる。</b>秩序が壊れています。まず <code>scf.in</code> の
+        <code>ntyp</code> が副格子の数だけあるか、<code>starting_magnetization</code> の符号が
+        分かれているかを確認してください。</li>
+    <li><b>vc-relax が終わらない。</b><code>relax.press_conv_thr</code>（既定 0.5 kbar）は厳しめです。金属で k 点が粗いと圧力が振動します。</li>
+    <li><b>QE の生の出力が見たい。</b>各段のディレクトリに <code>*.in</code> と <code>*.out</code> がそのまま残っています。<code>ezcal</code> は何も隠しません。</li>
+  </ul>
+
+  <h3>再現する</h3>
+  <p>実行ディレクトリの <code>qe_config.used.yaml</code> には、自動決定された値も含めて実際に効いた設定が全部入っています。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal auto Si.cif -c ezcal_out/Si_auto/qe_config.used.yaml</b></pre></div>
+</section>
+
+<!-- ========================= 11 ========================= -->
+<!-- ========================= 11 ========================= -->
+<section id="charge" data-lv="b">
+  <div class="s-head"><span class="s-num">11</span><h2>電荷密度と原子電荷</h2><span class="badge b">基本</span></div>
+  <p class="lead">どこに電子がいるかを、空間分布と原子ごとの数値の両方で出します。</p>
+
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal charge MgO.cif --np 8</b>                   <span class="c"># scf → dos → charge</span>
+<span class="p">$</span> <b>ezcal charge NiO.cif --afm Ni=2.0 --np 8</b>      <span class="c"># スピン密度も自動で追加</span>
+<span class="p">$</span> <b>ezcal auto Si.cif --charge</b>                    <span class="c"># auto の最後に付ける</span>
+<span class="p">$</span> <b>ezcal charge X.cif --charge-kinds density,spin</b></pre></div>
+
+  <h3>出力</h3>
+  <div class="tree"><b>ezcal_out/MgO_charge/</b>
+├── 02_charge/<i>density.cube</i>  <i>spin.cube</i>   <span class="cm">Gaussian cube（数 MB）</span>
+├── 02_charge/<i>atomic_charges.csv</i>          <span class="cm">原子ごとの全数値</span>
+├── <i>properties.md</i> / <i>properties.json</i>       <span class="cm">ギャップ・E_F・原子ごとの量を集約</span>
+└── plots/
+      ├── <i>density_profile.png</i>             <span class="cm">各軸の平面平均（原子位置つき）</span>
+      ├── <i>density_slice.png</i>               <span class="cm">3面の2D断面</span>
+      └── <i>density_isosurface.html</i>         <span class="cm">3D等値面（plotly、原子つき）</span></div>
+
+  <h3>原子電荷は2通り出ます</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>手法</th><th>出どころ</th><th>性格</th></tr></thead>
+    <tbody>
+      <tr><td class="m">Löwdin</td><td><code>projwfc.x</code> の出力に元から入っている（<b>追加計算ゼロ</b>）</td>
+          <td>軌道分解（s/p/d/f）と原子ごとの磁気モーメントも同時に得られる。基底への射影なので定義依存が強め</td></tr>
+      <tr><td class="m">Bader</td><td>密度をグリッド上で原子の basin に分割（<b>外部バイナリ不要</b>の内蔵実装）</td>
+          <td>基底に依らない。グリッド由来の不確かさが 0.01〜0.05 e 程度</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="out"><span class="cm"># MgO の properties.md より</span>
+ #  site  element  Löwdin charge (e)  Bader charge (e)  Bader volume (Å³)
+ 1  Mg    Mg               <b>1.524</b>             <b>1.683</b>               4.80
+ 2  O     O               <b>-1.358</b>            <b>-1.683</b>              13.88</div>
+  <p style="margin-top:.8rem">値が違うのは<b>定義が違うから</b>です。系どうしを比べるときは、必ず同じ手法どうしで比べてください。
+     Bader の合計はゼロになり、basin 体積の和はセル体積に一致します（内部の検算に入れてあります）。</p>
+
+  <h3>どの密度を使うか</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th class="m">--charge-kinds</th><th class="m">pp.x</th><th>用途</th></tr></thead>
+    <tbody>
+      <tr><td class="m">density<span class="d">（既定）</span></td><td class="m">plot_num=0</td>
+          <td>擬電荷密度。積分が価電子数と厳密に一致し、Bader が安定</td></tr>
+      <tr><td class="m">spin</td><td class="m">6</td><td>ρ↑−ρ↓。nspin=2 なら自動で追加される</td></tr>
+      <tr><td class="m">ae_valence / ae_total</td><td class="m">17 / 21</td>
+          <td>PAW の全電子密度。<b>scf の FFT グリッドでは粗すぎて破綻します</b></td></tr>
+      <tr><td class="m">potential</td><td class="m">11</td><td>bare + Hartree ポテンシャル</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="warnbox">
+    <b>全電子密度（17 / 21）は grid が足りないと壊れます</b>
+    <p>QE のドキュメントにも「非常に密な実空間グリッドが必要」と書かれています。実際 NiO を
+       75³ グリッドで試すと、plot_num=21 は積分が 72 e のはずが <b>115 e</b> になり、
+       等価な 2 つの Ni に別々の電荷が出ました。<b>ezcal は積分値を価電子数と突き合わせて
+       自動で警告します</b>ので、警告が出たら <code>density</code> に戻すか <code>ecutrho</code> を上げてください。</p>
+  </div>
+
+  <h3>物理量のまとめ（properties.md）</h3>
+  <p>バンドギャップ（金属なら 0 と明記）・フェルミ準位・VBM/CBM・全磁化と絶対磁化・
+     原子ごとの磁気モーメントと電荷が 1 ページにまとまります。どのステップが出した値かも書かれます。</p>
+  <ul class="plain">
+    <li><b>原子ごとの磁気モーメントは 2 通り出ます。</b>pw.x の球積分値と Löwdin の
+        射影値で、独立な見積もりなので食い違いが大きければ収束を疑う材料になります
+        （AFM NiO では ±1.388 と ±1.330 でよく一致）。</li>
+    <li><b>3D 等値面は両方の副格子が同時に見える唯一の図です。</b>2D 断面は
+        <code>charge.slice_fraction</code> の平面しか通らないので、反強磁性体では片方しか映らないことがあります。</li>
+  </ul>
+</section>
+
+<!-- ========================= 12 ========================= -->
+<section id="bench" data-lv="b">
+  <div class="s-head"><span class="s-num">12</span><h2>ベンチマークで確認</h2><span class="badge b">基本</span></div>
+  <p class="lead">新しい環境で ezcal が正しく動いているかを 1 コマンドで確かめます。</p>
+
+  <p>原子数の少ない金属 20 種・酸化物 20 種を <code>auto</code> で流し、
+     <b>実験値</b>と <b>Materials Project</b> に突き合わせます。構造はプロトタイプと実験格子定数から
+     生成するので、ネットワークも API キーも無しで走ります。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal bench list --set metals</b>                    <span class="c"># 対象と参照値の一覧</span>
+<span class="p">$</span> <b>ezcal bench run --only Al,MgO -o /tmp/chk --np 8</b>  <span class="c"># 動作確認だけなら数十秒</span>
+<span class="p">$</span> <b>ezcal bench run --set all -o 03_qe_bench --np 8</b>   <span class="c"># 本番（数時間）</span>
+<span class="p">$</span> <b>ezcal bench report 03_qe_bench --mp-api-key &lt;KEY&gt;</b>  <span class="c"># 予実比較</span></pre></div>
+
+  <h3>比較する量</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>量</th><th>計算側の出所</th><th>比較先</th></tr></thead>
+    <tbody>
+      <tr><td class="m">格子定数 a, c, c/a</td><td>vc-relax 後の従来型セル</td><td>実験・MP</td></tr>
+      <tr><td class="m">原子あたり体積 V₀</td><td>vc-relax</td><td>実験・MP</td></tr>
+      <tr><td class="m">密度</td><td>vc-relax</td><td>実験・MP</td></tr>
+      <tr><td class="m">体積弾性率 B₀, B₀′</td><td>E(V) の Birch–Murnaghan フィット</td><td>実験</td></tr>
+      <tr><td class="m">バンドギャップ</td><td>密メッシュ nscf（直接/間接も）</td><td>実験・MP</td></tr>
+      <tr><td class="m">磁気モーメント</td><td>scf（サイト分解）</td><td>実験・MP</td></tr>
+      <tr><td class="m">N(E_F)</td><td>dos.x</td><td>金属の文献値</td></tr>
+      <tr><td class="m">d バンド中心</td><td>projwfc.x</td><td>定性比較</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="warnbox">
+    <b>E(V) は全体積で同じ k 点メッシュを使います</b>
+    <p><code>kspacing</code> に任せると体積ごとにメッシュが変わり、E(V) に段差が入って
+       体積弾性率が意味を失います（実際 Al で 102 GPa という値が出ていました。
+       メッシュを固定すると 78 GPa になり文献値と一致します）。</p>
+  </div>
+
+  <h3>期待される数字</h3>
+  <p>参照実行（QE 7.5, 8 コア, 40 系, 167 分）の結果です。手元の値がこれから大きく外れていたら、
+     インストールか設定を疑ってください。</p>
+  <div class="tw">
+  <table>
+    <caption>平均絶対相対誤差（MARE）</caption>
+    <thead><tr><th>量</th><th class="m">vs 実験</th><th class="m">vs Materials Project</th></tr></thead>
+    <tbody>
+      <tr><td>格子定数 a</td><td class="m">0.9 %</td><td class="m">0.6 %</td></tr>
+      <tr><td>格子定数 c</td><td class="m">1.2 %</td><td class="m">0.7 %</td></tr>
+      <tr><td>c/a</td><td class="m">—</td><td class="m">0.2 %</td></tr>
+      <tr><td>原子あたり体積</td><td class="m">—</td><td class="m">2.1 %</td></tr>
+      <tr><td>体積弾性率 B₀</td><td class="m">金属 12 % / 酸化物 6.5 %</td><td class="m">—</td></tr>
+      <tr><td>バンドギャップ</td><td class="m">−55 %（−2.36 eV）</td><td class="m"><b>MAE 0.15 eV</b></td></tr>
+      <tr><td>磁気モーメント</td><td class="m">金属 8.7 % / AFM 酸化物 26 %</td><td class="m">—</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>結果の読み方</h3>
+  <ul class="plain">
+    <li><b>格子定数と体積弾性率は実験と数 % で合うはずです。</b>ここが大きくずれていたら、
+        擬ポテンシャル・カットオフ・k 点のどれかがおかしいと考えてください。</li>
+    <li><b>バンドギャップは実験より 5 割ほど小さく出ます。</b>これは PBE の既知の性質で、
+        バグではありません。MP も PBE 系なので <b>MP とは MAE 0.15 eV でほぼ一致します</b>。
+        インストールの健全性はこちらで判断してください。</li>
+    <li><b>MP が別相に緩和した系は a / c の比較から自動で除外されます</b>
+        （Fe→Fmmm, BaTiO3→I4/mcm, CoO→R-3m など）。体積・密度・ギャップは比較を続けます。</li>
+    <li><b>パリティ図は実験用と MP 用の 2 枚出ます。</b>MP の図はギャップまで対角線上に乗り
+        （外れる 2 点は MP が +U を使う NiO と MnO）、実験の図でギャップだけが下振れするのと
+        対照的です。<b>この 2 枚を見比べるのが、実装の健全性を判断する一番早い方法です。</b>
+        MP 用の図は <code>--mp-api-key</code> を渡したときだけ作られます。</li>
+    <li><b>NiO / MnO / CoO は反強磁性セルで計算します。</b>+U を付けていないので
+        ギャップは実験より大幅に小さく出ます。</li>
+    <li>凝集エネルギー・生成エネルギーは含めていません。孤立原子や O₂ の基準計算と
+        アニオン補正が必要で、インストール確認とは別の作業だからです。</li>
+  </ul>
+
+  <h3>出力</h3>
+  <div class="tree"><b>03_qe_bench/</b>
+├── <i>bench_results.json</i>        <span class="cm">全系の生データ</span>
+├── <i>bench_comparison.csv</i>      <span class="cm">量ごとの予実表（計算値・実験・MP・誤差）</span>
+├── <i>bench_summary.json</i>        <span class="cm">量ごとの ME / MAE / MARE</span>
+├── <i>bench_report.md</i>           <span class="cm">人が読む表</span>
+├── plots/<i>parity_vs_experiment.png</i>  <span class="cm">実験とのパリティ図（.html も）</span>
+├── plots/<i>parity_vs_mp.png</i>        <span class="cm">Materials Project とのパリティ図</span>
+├── metals/Al/ …                 <span class="cm">各系の実行ディレクトリ（通常の ezcal 出力）</span>
+└── oxides/MgO/ …</div>
+  <p style="margin-top:.9rem">途中で止めても <code>--resume</code>（既定）で続きから流せます。
+     やり直したいときは <code>--restart</code>。</p>
+</section>
+
+<!-- ========================= 12 ========================= -->
+<section id="gloss" data-lv="b">
+  <div class="s-head"><span class="s-num">13</span><h2>用語ミニ辞典</h2><span class="badge b">基本</span></div>
+  <p class="lead">オプション名に出てくる言葉だけ、最短で。</p>
+  <dl class="gloss">
+    <dt>SCF</dt><dd>自己無撞着計算。電子密度が自分自身と矛盾しなくなるまで繰り返す、全ての出発点。</dd>
+    <dt>NSCF</dt><dd>SCF で得た電荷密度を固定して、別の（普通はもっと密な）k 点で固有値だけ求める計算。DOS やバンドの前段。</dd>
+    <dt>ecutwfc</dt><dd>波動関数を展開する平面波のカットオフ。大きいほど正確で遅い。単位 Ry。</dd>
+    <dt>ecutrho</dt><dd>電荷密度側のカットオフ。PAW/USPP では ecutwfc の 8 倍が目安。</dd>
+    <dt>k 点</dt><dd>逆格子空間のサンプリング点。金属ほど密に要る。<code>8 8 8</code> は各方向 8 分割。</dd>
+    <dt>スメアリング</dt><dd>フェルミ面付近の占有数をぼかして収束を助ける手法。金属には必須。幅が degauss。</dd>
+    <dt>PAW / USPP / NC</dt><dd>擬ポテンシャルの種類。PAW と超ソフト（USPP）は低いカットオフで済み、ノルム保存（NC）は素直だが重い。</dd>
+    <dt>価電子数 Z_val</dt><dd>その擬ポテンシャルが陽に扱う電子数。バンド数の見積もりに使う。</dd>
+    <dt>VBM / CBM</dt><dd>価電子帯上端 / 伝導帯下端。その差がバンドギャップ。</dd>
+    <dt>E_F</dt><dd>フェルミ準位。金属では電子が詰まっている高さ。絶縁体ではギャップの中のどこか（計算手法による）。</dd>
+    <dt>直接 / 間接</dt><dd>VBM と CBM が同じ k 点にあれば直接ギャップ、違えば間接ギャップ。Si は間接。</dd>
+    <dt>PDOS</dt><dd>状態密度を原子・軌道（s, p, d）ごとに分解したもの。どの軌道がどのバンドを作っているか分かる。</dd>
+    <dt>vc-relax</dt><dd>セル（格子ベクトル）と原子位置を同時に最適化する計算。relax はセルを固定。</dd>
+    <dt>primitive cell</dt><dd>結晶を表現する最小の単位胞。同じ結晶でも取り方が複数あるので、ezcal は標準形に揃える。</dd>
+    <dt>高対称線</dt><dd>バンド図の横軸。Γ, X, L のような特別な k 点を結んだ経路で、seekpath が結晶構造から決める。</dd>
+    <dt>強磁性 / 反強磁性</dt><dd>磁気モーメントが揃っているのが強磁性、隣り合う副格子で逆を向いて打ち消し合うのが反強磁性。後者は正味の磁化がほぼ 0 になる。</dd>
+    <dt>副格子</dt><dd>同じ元素でも磁気モーメントの向きが違うサイトの集まり。ezcal は <code>Ni1</code>, <code>Ni2</code> というラベルで区別し、pw.x にも別 species として渡す。</dd>
+    <dt>磁気単位胞</dt><dd>磁気秩序まで含めて周期性が閉じるセル。反強磁性では化学式上の最小セルより大きくなる。</dd>
+    <dt>絶対磁化 |M|</dt><dd>磁気モーメントの大きさをセル全体で積分したもの。反強磁性で正味の磁化が 0 でも、これは 0 にならない。</dd>
+    <dt>Bader 電荷</dt><dd>電子密度を「勾配がゼロになる面」で原子ごとの領域に切り分け、その中の電子を数えたもの。基底の取り方に依らないのが利点。</dd>
+    <dt>Löwdin 電荷</dt><dd>波動関数を原子軌道に射影して数えた電荷。軌道ごとの内訳が出るが、使う基底に依存する。</dd>
+    <dt>cube ファイル</dt><dd>3次元の量（電荷密度など）を格子点上に並べたテキスト形式。VESTA など多くの可視化ソフトが読める。</dd>
+    <dt>体積弾性率 B₀</dt><dd>体積を縮めるのに要する固さ。E(V) 曲線の曲率から求める。格子定数と並ぶ、構造記述の標準的な検証量。</dd>
+    <dt>N(E_F)</dt><dd>フェルミ準位における状態密度。金属の電子物性（比熱・超伝導など）に直結する量で、DOS の形を数値で比べるのに使う。</dd>
+    <dt>d バンド中心</dt><dd>占有 d 状態のエネルギー重心（E_F 基準）。遷移金属の触媒活性の指標としてよく使われる。</dd>
+    <dt>DFT+U</dt><dd>遷移金属の d 電子などに補正を入れる手法。<code>--hubbard-u Ni=6.0</code> のように与える。</dd>
+  </dl>
+</section>
+
+<footer>
+  <p>ezcal 0.1.0 — /home/tajimamainpc/06_claude_code/08_qez</p>
+  <p>README.md · docs/EXTENDING.md · docs/REPORT.md · notebooks/ezcal_demo.ipynb · 02_ezcal_test/run_tests.sh</p>
+</footer>
+</main>
+</div>
+
+<script>
+// ---- copy buttons -------------------------------------------------------
+document.querySelectorAll(".cmd").forEach(function (box) {
+  var btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "copy";
+  btn.textContent = "コピー";
+  btn.setAttribute("aria-label", "コマンドをコピー");
+  btn.addEventListener("click", function () {
+    var text = box.querySelector("pre").innerText
+      .split("\n")
+      .map(function (l) { return l.replace(/^\$\s?/, ""); })
+      .join("\n")
+      .trim();
+    var done = function () {
+      btn.textContent = "コピー済";
+      btn.classList.add("done");
+      setTimeout(function () { btn.textContent = "コピー"; btn.classList.remove("done"); }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { btn.textContent = "失敗"; });
+    } else {
+      var ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); done(); } catch (e) { btn.textContent = "失敗"; }
+      document.body.removeChild(ta);
+    }
+  });
+  box.appendChild(btn);
+});
+
+// ---- level filter -------------------------------------------------------
+var segButtons = document.querySelectorAll(".seg button");
+function applyLevel(level) {
+  document.querySelectorAll("section[data-lv]").forEach(function (s) {
+    s.hidden = level !== "all" && s.dataset.lv !== level;
+  });
+  document.querySelectorAll("nav a[data-lv]").forEach(function (a) {
+    a.parentElement.hidden = level !== "all" && a.dataset.lv !== level;
+  });
+  segButtons.forEach(function (b) {
+    b.setAttribute("aria-pressed", String(b.dataset.level === level));
+  });
+  try { localStorage.setItem("ezcal-manual-level", level); } catch (e) {}
+}
+segButtons.forEach(function (b) {
+  b.addEventListener("click", function () { applyLevel(b.dataset.level); });
+});
+try {
+  var saved = localStorage.getItem("ezcal-manual-level");
+  if (saved === "b" || saved === "a") applyLevel(saved);
+} catch (e) {}
+
+// ---- nav highlight ------------------------------------------------------
+var links = {};
+document.querySelectorAll("nav a").forEach(function (a) { links[a.getAttribute("href").slice(1)] = a; });
+if ("IntersectionObserver" in window) {
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      var a = links[e.target.id];
+      if (!a) return;
+      if (e.isIntersecting) {
+        Object.keys(links).forEach(function (k) { links[k].classList.remove("on"); });
+        a.classList.add("on");
+      }
+    });
+  }, { rootMargin: "-10% 0px -75% 0px" });
+  document.querySelectorAll("section[id]").forEach(function (s) { obs.observe(s); });
+}
+</script>
+</body>
+</html>

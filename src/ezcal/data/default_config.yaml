@@ -1,0 +1,169 @@
+# ------------------------------------------------------------------
+# ezcal default configuration  (qe_config.yaml)
+# Copy it with `ezcal config init` and edit whatever you need.
+# Every key here can also be overridden on the command line, either by a
+# dedicated option (--ecutwfc 60) or generically (--set dft.mixing_beta=0.2).
+# ------------------------------------------------------------------
+
+# which calculation engine to drive: qe | vasp | mlip
+engine: qe
+
+# ---------------------------- executables --------------------------
+qe:
+  bin_dir: ~/repos/q-e/bin        # used to fill in any command left null
+  commands:
+    pw: null                      # null -> {bin_dir}/pw.x
+    dos: null
+    projwfc: null
+    bands: null
+    pp: null
+  prefix: ezcal                   # QE prefix / outdir file names
+  pseudo_dir: ~/.ezcal/pseudo     # local pseudopotential library
+  pseudo_extra_dirs: []           # extra directories to search first; a file found
+                                  # there is copied into pseudo_dir so the generated
+                                  # input stays self-contained
+  # preference order when several pseudopotentials exist for an element
+  pseudo_preference: [kjpaw, rrkjus, paw, us, nc]
+  pseudo_download: true           # fetch missing UPFs from the QE website
+  pseudo_source: https://pseudopotentials.quantum-espresso.org/upf_files
+
+vasp:
+  command: vasp_std               # or 'mock-vasp' (aiida-vasp) to replay recorded runs
+  incar: {}                       # extra/override INCAR tags; a null value deletes one
+  incar_mode: merge               # merge | replace (replace: vasp.incar IS the INCAR)
+  kpoints_style: gamma            # gamma | monkhorst
+  potcar_dir: null                # licensed POTCAR library (potpaw_PBE/...)
+  potcar_functional: PBE
+  potcar_mode: auto               # auto | library | placeholder
+                                  #   auto -> library if potcar_dir is set, else a clearly
+                                  #   labelled placeholder when the command is a mock
+  potcar_map: {}                  # {Si: Si_sv} element -> POTCAR directory name
+  magmom_default: 1.0             # MAGMOM (Bohr magneton) for sites without a value.
+                                  # dft.starting_magnetization / --magmom / --afm are
+                                  # passed through unchanged: QE reads them as a fraction
+                                  # of the valence charge, VASP as Bohr magneton.
+  mock:                           # aiida-vasp's mock-vasp: hashes INCAR/KPOINTS/POSCAR and
+    registry: null                #   replays the outputs recorded under this directory
+    vasp_cmd: null                #   real VASP to run (and record) on a registry miss
+
+mlip:
+  backend: sevennet               # sevennet | (future) mace, chgnet ...
+  model: 7net-0                   # SevenNet checkpoint name or path
+  device: cpu
+  fmax: 0.02                      # force threshold for relaxation, eV/Ang
+  steps: 300
+  optimizer: FIRE
+  filter: frechet                 # cell filter used by vc-relax
+
+# ------------------------------ running ----------------------------
+run:
+  scheduler: local                # local | qsub
+  nproc: 8                        # MPI ranks
+  mpirun: mpirun
+  mpirun_flags: []                # e.g. ["--bind-to", "core"]
+  omp_num_threads: 1
+  timeout: null                   # seconds, null = no limit
+  qsub:
+    script: run_qe.sh             # template submitted with qsub
+    submit_cmd: qsub
+    status_cmd: qstat
+    queue: null
+    walltime: "24:00:00"
+    nodes: 1
+    ppn: null                   # null -> run.nproc
+    job_prefix: ezcal
+    wait: false                   # poll qstat until the job disappears
+    poll_interval: 30
+
+# ------------------------------- DFT -------------------------------
+dft:
+  functional: pbe                 # pbe | pbesol | pz | lda  (pseudo choice + input_dft)
+  input_dft: null                 # force QE's input_dft, e.g. 'vdw-df2-b86r'
+  ecutwfc: null                   # Ry, null -> taken from the pseudopotential headers
+  ecutrho: null                   # Ry, null -> auto (dual 8 for US/PAW, 4 for NC)
+  ecut_safety: 1.0                # multiply the suggested cutoffs by this factor
+  kmesh: null                     # [nx, ny, nz]; null -> derived from kspacing
+  kspacing: 0.25                  # 1/Angstrom (includes the 2*pi factor)
+  koffset: [0, 0, 0]
+  occupations: smearing           # smearing | fixed | tetrahedra
+  smearing: mv                    # mv | gaussian | mp | fd
+  degauss: 0.02                   # Ry
+  conv_thr: 1.0e-8
+  mixing_beta: 0.4
+  mixing_mode: plain
+  electron_maxstep: 200
+  diagonalization: david
+  nspin: 1                        # 1 = non magnetic, 2 = collinear spin polarised
+  starting_magnetization: {}      # {Fe: 0.5} or {} -> 0.3 on every element when nspin=2
+  magnetic_sublattices: {}        # antiferromagnets: {Fe: [0.6, -0.6]} labels the Fe
+                                  # sites Fe1, Fe2, Fe1, ... in the order they appear,
+                                  # so pw.x sees two species and lowers the symmetry.
+                                  # The cell must already hold the ordering (--as-is).
+  tot_magnetization: null
+  nbnd: null
+  hubbard_u: {}                   # {Fe: 4.0}, written as a HUBBARD card (QE >= 7.1)
+  vdw_corr: null                  # grimme-d3 | grimme-d2 | xdm | ts
+  assume_isolated: null           # makov-payne | martyna-tuckerman ... for molecules
+  nosym: false
+  tstress: true
+  tprnfor: true
+
+# --------------------------- relaxation ----------------------------
+relax:
+  etot_conv_thr: 1.0e-5
+  forc_conv_thr: 1.0e-4
+  press_conv_thr: 0.5             # kbar (QE unit)
+  ion_dynamics: bfgs
+  cell_dynamics: bfgs
+  cell_dofree: all
+  nstep: 100
+  press: 0.0                      # target pressure, kbar
+
+# ------------------------------ nscf -------------------------------
+nscf:
+  kmesh_scale: 2                  # nscf mesh = scf mesh * scale (for a smooth DOS)
+  occupations: tetrahedra
+  nbnd_extra_ratio: 0.3           # extra empty bands, fraction of occupied bands
+  conv_thr_scale: 0.1
+
+# ------------------------------ bands ------------------------------
+bands:
+  line_density: 25                # k-points per (2*pi/Angstrom) of path length
+  min_points_per_segment: 6
+  nbnd_extra_ratio: 0.4
+  symprec: 1.0e-5
+  emin: null                      # plot window relative to E_F (eV)
+  emax: null
+
+# ------------------------------- dos -------------------------------
+dos:
+  degauss: 0.01                   # Ry, dos.x broadening (0 -> use the scf smearing)
+  deltae: 0.02                    # eV, energy grid step
+  emin: null
+  emax: null
+  pdos: true                      # also run projwfc.x
+
+# ------------------------- charge density --------------------------
+charge:
+  kinds: [density]                # density | spin | ae_valence | ae_total | potential
+                                  #   density    pp.x plot_num=0, the pseudo valence density
+                                  #   spin       plot_num=6, rho_up - rho_down (auto when nspin=2)
+                                  #   ae_valence plot_num=17, PAW all-electron valence
+                                  #   ae_total   plot_num=21, PAW all-electron incl. core
+                                  # 17 and 21 need a much denser FFT grid than an scf
+                                  # normally uses; ezcal checks the integral and says so.
+  bader: true                     # partition the density into atomic basins
+  bader_source: density           # which cube to partition
+  slice_axis: null                # null -> one slice per axis; 0/1/2 -> just that one
+  slice_fraction: 0.5             # where along that axis to cut
+  isosurface: true                # 3D isosurface (plotly only)
+  isosurface_grid: 64             # the isosurface is downsampled to this many points/axis
+  keep_cube: true                 # cube files are a few MB each
+
+# ----------------------------- output ------------------------------
+output:
+  dir: ezcal_out                  # results root; each run gets a sub directory
+  plot: [matplotlib]              # matplotlib | plotly | both | none
+  image_format: png
+  dpi: 200
+  keep_wavefunctions: false       # delete tmp/*.wfc* after a successful run

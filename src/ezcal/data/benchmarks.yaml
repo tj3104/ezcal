@@ -1,0 +1,96 @@
+# ------------------------------------------------------------------------
+# ezcal benchmark suite
+#
+# Small-cell metals and oxides with well established room-temperature
+# experimental structures, used to check that an ezcal installation
+# reproduces known numbers.  Structures are generated from the prototype +
+# experimental lattice constants, so no network or API key is needed to run
+# the suite; Materials Project values are looked up at report time when a
+# key is available (matched by formula + space group, never by a hard-coded
+# material id).
+#
+# reference.a / .c   experimental lattice constants (Angstrom, ~300 K)
+# reference.gap      experimental band gap (eV); null when the accepted
+#                    value is ambiguous or not well established
+# reference.magmom   experimental magnetic moment (Bohr magneton / atom)
+#
+# Sources are the standard crystallographic and semiconductor compilations
+# (Wyckoff, Crystal Structures; Landolt-Bornstein; CRC Handbook).  Values
+# that vary noticeably between compilations are left null rather than
+# guessed.
+# ------------------------------------------------------------------------
+
+defaults:
+  task: auto
+  conv_thr: 1.0e-6
+  kspacing: 0.22
+  line_density: 12
+
+metals:
+  defaults:
+    kspacing: 0.18            # metals need a dense mesh
+    degauss: 0.02
+    smearing: mv
+  entries:
+    - {name: Al, formula: Al,  prototype: fcc, a: 4.050, reference: {a: 4.050, b0: 76}}
+    - {name: Cu, formula: Cu,  prototype: fcc, a: 3.615, reference: {a: 3.615, b0: 137}}
+    - {name: Ag, formula: Ag,  prototype: fcc, a: 4.085, reference: {a: 4.085, b0: 101}}
+    - {name: Au, formula: Au,  prototype: fcc, a: 4.078, reference: {a: 4.078, b0: 173}}
+    - {name: Pd, formula: Pd,  prototype: fcc, a: 3.891, reference: {a: 3.891, b0: 181}}
+    - {name: Pt, formula: Pt,  prototype: fcc, a: 3.924, reference: {a: 3.924, b0: 283}}
+    - {name: Rh, formula: Rh,  prototype: fcc, a: 3.803, reference: {a: 3.803, b0: 271}}
+    - {name: Ir, formula: Ir,  prototype: fcc, a: 3.839, reference: {a: 3.839, b0: 355}}
+    - {name: Pb, formula: Pb,  prototype: fcc, a: 4.950, reference: {a: 4.950, b0: 46}}
+    - {name: Ni, formula: Ni,  prototype: fcc, a: 3.524, nspin: 2,
+       magmom: {Ni: 0.4}, reference: {a: 3.524, magmom: 0.61, b0: 186}}
+    - {name: Fe, formula: Fe,  prototype: bcc, a: 2.867, nspin: 2,
+       magmom: {Fe: 0.6}, degauss: 0.03, reference: {a: 2.867, magmom: 2.22, b0: 168}}
+    - {name: W,  formula: W,   prototype: bcc, a: 3.165, reference: {a: 3.165, b0: 310}}
+    - {name: Mo, formula: Mo,  prototype: bcc, a: 3.147, reference: {a: 3.147, b0: 272}}
+    - {name: Nb, formula: Nb,  prototype: bcc, a: 3.301, reference: {a: 3.301, b0: 170}}
+    - {name: Ta, formula: Ta,  prototype: bcc, a: 3.306, reference: {a: 3.306, b0: 194}}
+    - {name: V,  formula: V,   prototype: bcc, a: 3.024, reference: {a: 3.024, b0: 162}}
+    - {name: Li, formula: Li,  prototype: bcc, a: 3.491, reference: {a: 3.491, b0: 13.0}}
+    - {name: Na, formula: Na,  prototype: bcc, a: 4.225, reference: {a: 4.225, b0: 6.3}}
+    - {name: Mg, formula: Mg,  prototype: hcp, a: 3.209, c: 5.211, reference: {a: 3.209, c: 5.211, b0: 45}}
+    - {name: Ti, formula: Ti,  prototype: hcp, a: 2.951, c: 4.684, reference: {a: 2.951, c: 4.684, b0: 105}}
+
+oxides:
+  defaults:
+    kspacing: 0.28
+    occupations: smearing
+    degauss: 0.01
+  entries:
+    - {name: MgO,  formula: MgO,  prototype: rocksalt, a: 4.212, reference: {a: 4.212, gap: 7.8, b0: 160}}
+    - {name: CaO,  formula: CaO,  prototype: rocksalt, a: 4.811, reference: {a: 4.811, gap: 7.0, b0: 111}}
+    - {name: SrO,  formula: SrO,  prototype: rocksalt, a: 5.160, reference: {a: 5.160, gap: 5.9, b0: 91}}
+    - {name: BaO,  formula: BaO,  prototype: rocksalt, a: 5.539, reference: {a: 5.539, gap: 4.4, b0: 66}}
+    - {name: CdO,  formula: CdO,  prototype: rocksalt, a: 4.696,
+       reference: {a: 4.696, gap: null}, note: "gap is indirect and quoted between 0.8 and 2.2 eV"}
+    - {name: Li2O, formula: Li2O, prototype: antifluorite, a: 4.611, reference: {a: 4.611, gap: 7.99, b0: 82}}
+    - {name: Na2O, formula: Na2O, prototype: antifluorite, a: 5.550, reference: {a: 5.550, gap: null}}
+    - {name: ZnO,  formula: ZnO,  prototype: wurtzite, a: 3.250, c: 5.207, u: 0.382,
+       reference: {a: 3.250, c: 5.207, gap: 3.44, b0: 143}}
+    - {name: BeO,  formula: BeO,  prototype: wurtzite, a: 2.698, c: 4.380, u: 0.378,
+       reference: {a: 2.698, c: 4.380, gap: 10.6, b0: 224}}
+    - {name: Cu2O, formula: Cu2O, prototype: cuprite, a: 4.267, reference: {a: 4.267, gap: 2.17, b0: 112}}
+    - {name: TiO2-rutile,  formula: TiO2, prototype: rutile, a: 4.594, c: 2.959, u: 0.305,
+       reference: {a: 4.594, c: 2.959, gap: 3.03, b0: 211}}
+    - {name: TiO2-anatase, formula: TiO2, prototype: anatase, a: 3.785, c: 9.514, u: 0.208,
+       reference: {a: 3.785, c: 9.514, gap: 3.20}}
+    - {name: SnO2, formula: SnO2, prototype: rutile, a: 4.737, c: 3.186, u: 0.307,
+       reference: {a: 4.737, c: 3.186, gap: 3.60, b0: 205}}
+    - {name: GeO2, formula: GeO2, prototype: rutile, a: 4.395, c: 2.859, u: 0.306,
+       reference: {a: 4.395, c: 2.859, gap: null}}
+    - {name: SrTiO3, formula: SrTiO3, prototype: perovskite, a: 3.905,
+       reference: {a: 3.905, gap: 3.25, b0: 174}}
+    - {name: BaTiO3, formula: BaTiO3, prototype: perovskite, a: 4.006,
+       reference: {a: 4.006, gap: 3.20}, note: "cubic phase, stable above 393 K"}
+    - {name: KTaO3, formula: KTaO3, prototype: perovskite, a: 3.989,
+       reference: {a: 3.989, gap: 3.60}}
+    - {name: NiO, formula: NiO, prototype: rocksalt_afm2, a: 4.177, nspin: 2,
+       afm: {Ni: 2.0}, magmom: {O: 0.0}, reference: {a: 4.177, gap: 4.3, magmom: 1.9, b0: 199}}
+    - {name: MnO, formula: MnO, prototype: rocksalt_afm2, a: 4.445, nspin: 2,
+       afm: {Mn: 2.5}, magmom: {O: 0.0}, reference: {a: 4.445, gap: 3.9, magmom: 4.6, b0: 151}}
+    - {name: CoO, formula: CoO, prototype: rocksalt_afm2, a: 4.263, nspin: 2,
+       afm: {Co: 2.0}, magmom: {O: 0.0}, reference: {a: 4.263, gap: 2.5, magmom: 3.8, b0: 180}}
