@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -107,7 +108,133 @@ def band_arrays(bands_result, fermi: float | None = None) -> dict:
     distances = np.asarray(kpath.get("distances", np.arange(eig.shape[1])), dtype=float)
     labels = [(int(i), str(lab)) for i, lab in kpath.get("labels", [])]
     ef = fermi if fermi is not None else (bands_result.fermi_energy or 0.0)
-    return {"eigenvalues": eig, "distances": distances, "labels": labels, "fermi": ef}
+    kpoints = kpath.get("kpoints")
+    return {"eigenvalues": eig, "distances": distances, "labels": labels, "fermi": ef,
+            "kpoints": None if kpoints is None else np.asarray(kpoints, dtype=float)}
+
+
+#: バンド図の描画器。auto は materials_project 経路なら BSPlotter を選ぶ
+BAND_PLOTTERS = ("auto", "bsplotter", "ezcal")
+
+
+#: pymatgen で切った経路。BSPlotter がそのまま扱える
+_PYMATGEN_SCHEMES = frozenset({"materials_project", "latimer_munro", "setyawan_curtarolo"})
+
+
+def resolve_band_plotter(bands_result, plotter: str | None = "auto") -> str:
+    """``auto`` を実際の描画器名へ落とす。
+
+    pymatgen で切った経路 (既定の Materials Project 方式を含む) は pymatgen の
+    ``BSPlotter`` で描く。seekpath 経路と、逆格子情報を持たない古い実行結果は、
+    ezcal 自前の描画にフォールバックする。
+    """
+    name = str(plotter or "auto").strip().lower()
+    if name not in BAND_PLOTTERS:
+        raise ValueError(f"未知のバンド描画器 {plotter!r} です。"
+                         f"使えるのは {', '.join(BAND_PLOTTERS)} です")
+    kpath = (getattr(bands_result, "data", None) or {}).get("kpath") or {}
+    usable = bool(kpath.get("reciprocal_lattice")) and bool(kpath.get("kpoints"))
+    if name == "bsplotter":
+        return "bsplotter" if usable else "ezcal"
+    if name == "auto":
+        if usable and str(kpath.get("scheme", "")) in _PYMATGEN_SCHEMES:
+            return "bsplotter"
+        return "ezcal"
+    return "ezcal"
+
+
+def band_structure_symm_line(bands_result, fermi: float | None = None):
+    """ezcal のバンド結果から pymatgen の ``BandStructureSymmLine`` を組む。
+
+    ``fermi`` はエネルギーの基準点 (金属なら E_F、絶縁体なら VBM)。BSPlotter の
+    ``zero_to_efermi`` がこの値を 0 に合わせるので、ezcal 自前の描画と同じ縦軸に
+    なる。
+    """
+    from pymatgen.core import Lattice
+    from pymatgen.electronic_structure.bandstructure import BandStructureSymmLine
+    from pymatgen.electronic_structure.core import Spin
+
+    data = bands_result.data
+    kpath = data.get("kpath") or {}
+    recip = kpath.get("reciprocal_lattice")
+    kpoints = kpath.get("kpoints")
+    if not recip or not kpoints:
+        raise ValueError("BSPlotter には k 経路の逆格子と k 点座標が必要です "
+                         "(この結果は古い形式で保存されています)")
+
+    eig = np.asarray(data["eigenvalues"])                  # (nspin, nk, nbnd)
+    ef = fermi if fermi is not None else (bands_result.fermi_energy or 0.0)
+    spins = (Spin.up, Spin.down)
+    # pymatgen は (nbnd, nk) の並びを取る
+    eigenvals = {spins[s]: eig[s].T for s in range(eig.shape[0])}
+
+    kpoints = np.asarray(kpoints, dtype=float)
+    labels_dict: dict[str, list[float]] = {}
+    raw = kpath.get("raw_labels") or kpath.get("labels") or []
+    for index, name in raw:
+        index = int(index)
+        if not (0 <= index < len(kpoints)):
+            continue
+        # 経路の切れ目で 2 つのラベルが同じ点に乗ることがある ("U|K")
+        for part in str(name).split("|"):
+            part = part.strip()
+            if part:
+                labels_dict.setdefault(part, kpoints[index].tolist())
+
+    return BandStructureSymmLine(
+        kpoints, eigenvals, Lattice(np.asarray(recip, dtype=float)), float(ef),
+        labels_dict, coords_are_cartesian=False,
+        structure=getattr(bands_result, "structure", None),
+    )
+
+
+def _plot_bands_bsplotter(bands_result, path: Path, fermi: float | None,
+                          lo: float, hi: float, dpi: int, title: str, zero: str) -> Path:
+    """pymatgen の BSPlotter でバンド図を描く (Materials Project と同じ見た目)。"""
+    from pymatgen.electronic_structure.plotter import BSPlotter
+
+    plt = _mpl()
+    bs = band_structure_symm_line(bands_result, fermi)
+    ax = BSPlotter(bs).get_plot(zero_to_efermi=True, ylim=(lo, hi))
+    ax.set_ylabel(energy_axis_label(zero))
+    ax.set_title(title)
+    legend = ax.get_legend()
+    if legend is not None and not bs.is_spin_polarized:
+        # スピン非分極では "Band 0 up" の凡例は何も足さない
+        legend.remove()
+    fig = ax.get_figure()
+    fig.savefig(path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    return path
+
+
+def _path_breaks(distances: np.ndarray, kpoints: np.ndarray | None = None) -> np.ndarray:
+    """バンド経路の切れ目 (``U|K`` など) の直後のインデックス。
+
+    :func:`ezcal.structures.band_path` は区間ごとに独立してサンプリングするため、
+    経路長が進まない箇所が 2 種類ある。区間の「つなぎ目」(同じ k 点が 2 度並ぶ)
+    と、経路の「切れ目」(別の k 点が同じ経路長に並ぶ) で、線を切るのは後者だけ。
+    ``kpoints`` を渡さない場合は経路長だけで判定する。
+    """
+    distances = np.asarray(distances, dtype=float)
+    if distances.size < 2:
+        return np.empty(0, dtype=int)
+    span = float(distances[-1] - distances[0]) or 1.0
+    stalled = np.diff(distances) <= span * 1e-9
+    if kpoints is not None:
+        kpoints = np.asarray(kpoints, dtype=float)
+        if kpoints.shape[0] == distances.size:
+            moved = np.abs(np.diff(kpoints, axis=0)).max(axis=1) > 1e-8
+            stalled &= moved
+    return np.flatnonzero(stalled) + 1
+
+
+def _broken(values: np.ndarray, breaks: np.ndarray) -> np.ndarray:
+    """切れ目に NaN を挟み、線が跨いで繋がらないようにする。"""
+    values = np.asarray(values, dtype=float)
+    if breaks.size == 0:
+        return values
+    return np.insert(values, breaks, np.nan)
 
 
 def _tick_positions(distances: np.ndarray, labels: Sequence[tuple[int, str]]):
@@ -134,25 +261,39 @@ def _tick_positions(distances: np.ndarray, labels: Sequence[tuple[int, str]]):
 def plot_bands(bands_result, outdir: str | Path, backends: Iterable[str] = ("matplotlib",),
                fermi: float | None = None, emin: float | None = None,
                emax: float | None = None, dpi: int = 200,
-               title: str = "band structure", zero: str = "F") -> list[Path]:
+               title: str = "band structure", zero: str = "F",
+               plotter: str | None = "auto") -> list[Path]:
     arrays = band_arrays(bands_result, fermi)
     eig, dist = arrays["eigenvalues"], arrays["distances"]
     ef = arrays["fermi"]
     ticks, names = _tick_positions(dist, arrays["labels"])
+    breaks = _path_breaks(dist, arrays.get("kpoints"))
+    xdist = _broken(dist, breaks)
     lo = emin if emin is not None else -10.0
     hi = emax if emax is not None else 10.0
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
 
+    chosen = resolve_band_plotter(bands_result, plotter)
+
     for backend in backends:
+        if backend == "matplotlib" and chosen == "bsplotter":
+            try:
+                written.append(_plot_bands_bsplotter(
+                    bands_result, outdir / "bands.png", fermi, lo, hi, dpi, title, zero))
+                continue
+            except Exception as exc:      # 古い結果や特殊な経路では自前描画に戻す
+                warnings.warn(f"BSPlotter で描けませんでした ({exc})。"
+                              "ezcal 自前の描画に切り替えます", RuntimeWarning)
+
         if backend == "matplotlib":
             plt = _mpl()
             fig, ax = plt.subplots(figsize=(6.0, 4.6))
             colors = ["#1f4e9c", "#c0392b"]
             for spin in range(eig.shape[0]):
                 for band in range(eig.shape[2]):
-                    ax.plot(dist, eig[spin, :, band] - ef, lw=1.1,
+                    ax.plot(xdist, _broken(eig[spin, :, band] - ef, breaks), lw=1.1,
                             color=colors[spin % 2],
                             label=(f"spin {SPIN_LABEL[spin]}"
                                    if band == 0 and eig.shape[0] > 1 else None))
@@ -181,7 +322,7 @@ def plot_bands(bands_result, outdir: str | Path, backends: Iterable[str] = ("mat
             for spin in range(eig.shape[0]):
                 for band in range(eig.shape[2]):
                     fig.add_trace(go.Scatter(
-                        x=dist, y=eig[spin, :, band] - ef, mode="lines",
+                        x=xdist, y=_broken(eig[spin, :, band] - ef, breaks), mode="lines",
                         line=dict(width=1.4, color=colors[spin % 2]),
                         name=f"spin {SPIN_LABEL[spin]}" if band == 0 else None,
                         showlegend=(band == 0 and eig.shape[0] > 1),
@@ -311,6 +452,8 @@ def plot_bands_dos(bands_result, dos_result, outdir: str | Path,
     eig, dist = arrays["eigenvalues"], arrays["distances"]
     ef = arrays["fermi"] or 0.0
     ticks, names = _tick_positions(dist, arrays["labels"])
+    breaks = _path_breaks(dist, arrays.get("kpoints"))
+    xdist = _broken(dist, breaks)
     energy = np.asarray(data["energy"]) - ef
     total = np.asarray(data.get("dos"))
     mask = (energy >= emin) & (energy <= emax)
@@ -327,7 +470,8 @@ def plot_bands_dos(bands_result, dos_result, outdir: str | Path,
             colors = ["#1f4e9c", "#c0392b"]
             for spin in range(eig.shape[0]):
                 for band in range(eig.shape[2]):
-                    ax.plot(dist, eig[spin, :, band] - ef, lw=1.1, color=colors[spin % 2])
+                    ax.plot(xdist, _broken(eig[spin, :, band] - ef, breaks),
+                            lw=1.1, color=colors[spin % 2])
             ax.axhline(0.0, color="0.4", ls="--", lw=0.9)
             for tick in ticks:
                 ax.axvline(tick, color="0.75", lw=0.7)
@@ -364,7 +508,8 @@ def plot_bands_dos(bands_result, dos_result, outdir: str | Path,
             colors = ["#1f4e9c", "#c0392b"]
             for spin in range(eig.shape[0]):
                 for band in range(eig.shape[2]):
-                    fig.add_trace(go.Scatter(x=dist, y=eig[spin, :, band] - ef,
+                    fig.add_trace(go.Scatter(x=xdist,
+                                             y=_broken(eig[spin, :, band] - ef, breaks),
                                              mode="lines", showlegend=False,
                                              line=dict(width=1.2, color=colors[spin % 2])),
                                   row=1, col=1)

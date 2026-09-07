@@ -571,7 +571,7 @@ suggested for this set: <b>ecutwfc=58.0 Ry, ecutrho=464.0 Ry</b></div>
     <li><b>+U は元素指定のままで通ります。</b><code>--hubbard-u Ni=6.0</code> は
         <code>U Ni1-3d 6.0</code> と <code>U Ni2-3d 6.0</code> の両方に展開されます。
         副格子ごとに変えたければ <code>--hubbard-u Ni1=6.0,Ni2=5.0</code> と書けます。</li>
-    <li><b>バンド計算も磁気単位胞で行われます。</b>seekpath にも副格子を別 species として渡すため、
+    <li><b>バンド計算も磁気単位胞で行われます。</b>経路生成器にも副格子を別 species（pymatgen 方式ではダミー元素）として渡すため、
         磁気ブリルアンゾーンに対応した正しい経路が使われます（例: bcc Cr は AFM にすると
         bcc の Γ-H-N-P ではなく単純立方の Γ-X-M-R になります）。</li>
     <li><b>PDOS は副格子ごとに出ます。</b>反強磁性なら Ni1-d と Ni2-d が上下対称の鏡像になり、
@@ -586,7 +586,72 @@ suggested for this set: <b>ecutwfc=58.0 Ry, ecutrho=464.0 Ry</b></div>
 
 <b>Magnetic moment per site (uB): Ni1 +1.660, Ni2 -1.660, O -0.000, O -0.000</b></div>
 
-  <h3>5. 出力形式</h3>
+  <h3>5. バンド経路と描画方式</h3>
+  <p>高対称 k 経路の決め方は <code>--band-scheme</code>（設定なら <code>bands.scheme</code>）で選べます。
+     既定は <b>Materials Project のバンド図と同じ方式</b>で、経路に切れ目が生じません。</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>値</th><th>中身</th><th>切れ目</th></tr></thead>
+    <tbody>
+      <tr><td class="m">materials_project<span class="d">（既定）</span></td><td>Latimer-Munro 経路を <code>get_continuous_path()</code> で一筆書き（オイラー路）に組み直したもの</td><td><b>なし</b></td></tr>
+      <tr><td class="m">latimer_munro</td><td>同じ Latimer-Munro 経路を連続化せずそのまま</td><td>あり</td></tr>
+      <tr><td class="m">setyawan_curtarolo</td><td>pymatgen の Setyawan-Curtarolo (2010) 経路</td><td>あり</td></tr>
+      <tr><td class="m">seekpath</td><td>seekpath の HPKOT 経路 (Hinuma 2017)</td><td>あり</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>既定では pymatgen の <code>HighSymmKpath(structure, path_type="latimer_munro")</code> で経路を作り、
+     <code>HighSymmKpath.get_continuous_path()</code> に掛けてグラフ理論でオイラー路
+     （奇数次数の頂点間に辺を足した一筆書き）にします。出典は Munro, Latimer, Horton, Dwaraknath, Persson,
+     <i>npj Comput. Mater.</i> <b>6</b>, 112 (2020)。</p>
+  <div class="note">ラベルは Latimer-Munro 独自の体系（<code>a</code>, <code>c</code>, <code>d</code>, <code>e</code>, <code>g</code> … と <code>Γ</code>）です。
+     <code>X</code>, <code>M</code>, <code>R</code> のような古典的な名前が欲しい場合は
+     <code>--band-scheme setyawan_curtarolo</code> か <code>seekpath</code> を選んでください。</div>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal bands POSCAR</b>                                    <span class="c"># 既定 = MP 方式（連続）</span>
+<span class="p">$</span> <b>ezcal bands POSCAR --band-scheme setyawan_curtarolo</b>   <span class="c"># 古典的なラベル</span>
+<span class="p">$</span> <b>ezcal bands POSCAR --band-scheme seekpath</b>             <span class="c"># 従来の seekpath</span>
+<span class="p">$</span> <b>ezcal info POSCAR --band-path</b>                         <span class="c"># 経路だけ確認する</span></pre></div>
+
+  <p>k 点は <b>Materials Project / VASP の line mode と同じく区間ごとに独立して</b>並べます。
+     区間のつなぎ目では同じ k 点が 2 度現れますが、そのおかげで高対称点がすべて区間の端になり、
+     pymatgen 側でブランチと目盛りを正しく組めます。</p>
+
+  <p>オイラー路は全ての高対称線を通り、一部を 2 度通るため k 点が増えます（ベンチマーク 39 系・<code>line_density=12</code> の合計）。</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>方式</th><th>k 点数</th><th>比</th></tr></thead>
+    <tbody>
+      <tr><td class="m">seekpath</td><td>3,791</td><td>×1.00</td></tr>
+      <tr><td class="m">setyawan_curtarolo</td><td>4,475</td><td>×1.18</td></tr>
+      <tr><td class="m">latimer_munro</td><td>5,731</td><td>×1.51</td></tr>
+      <tr><td class="m">materials_project<span class="d">（既定）</span></td><td>7,090</td><td>×1.87</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>バンド段は非自己無撞着なので k 点数に比例します。軽くしたい場合は
+     <code>--band-scheme latimer_munro</code>（連続化なし）か <code>seekpath</code> を使ってください。</p>
+
+  <p>図の描き方は <code>--band-plotter</code>（設定なら <code>bands.plotter</code>）で選びます。</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>値</th><th>動作</th></tr></thead>
+    <tbody>
+      <tr><td class="m">auto<span class="d">（既定）</span></td><td>pymatgen 経路（<code>materials_project</code> を含む）なら pymatgen の <code>BSPlotter</code>、<code>seekpath</code> なら ezcal 自前の描画</td></tr>
+      <tr><td class="m">bsplotter</td><td>常に <code>BSPlotter</code> を使う（Materials Project と同じ見た目）</td></tr>
+      <tr><td class="m">ezcal</td><td>常に自前の描画を使う（plotly 出力・バンド+DOS 併記図はこちら）</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="note">逆格子情報を持たない古い実行結果は <code>BSPlotter</code> で描けないため、自動的に自前の描画へ戻ります。
+     <code>ezcal plot &lt;rundir&gt; --band-plotter ezcal</code> のように描き直しでも指定できます。</div>
+
+  <p><b>経路の切れ目について。</b>既定の <code>materials_project</code> では切れ目が生じません
+     （ベンチマーク 39 系すべてで切れ目 0 を確認済み）。それ以外の方式では <code>U|K</code> や
+     <code>Z|X</code> のような切れ目が残ります。切れ目の両側はブリルアンゾーン内の<b>別の点</b>なので、
+     そこでバンドの値が飛ぶのが正しい挙動です。切れ目の両端が対称等価な場合（例: fcc の <code>U|K</code>）は
+     飛び幅が厳密に 0 になり、図の上では連続に見えます。作図側は切れ目で線を繋ぎません。</p>
+
+  <h3>6. 出力形式</h3>
   <div class="cmd"><pre><span class="p">$</span> <b>ezcal auto Si.cif --plot matplotlib</b>   <span class="c"># PNG だけ（既定）</span>
 <span class="p">$</span> <b>ezcal auto Si.cif --plot plotly</b>       <span class="c"># 対話的 HTML だけ</span>
 <span class="p">$</span> <b>ezcal auto Si.cif --plot both</b>         <span class="c"># 両方</span>
@@ -644,6 +709,8 @@ suggested for this set: <b>ecutwfc=58.0 Ry, ecutrho=464.0 Ry</b></div>
     <thead><tr><th>オプション</th><th>既定</th><th>意味</th></tr></thead>
     <tbody>
       <tr><td class="m"><b>--line-density</b> &lt;float&gt;</td><td class="def">25</td><td>バンド経路の k 点密度（1/Å あたり）</td></tr>
+      <tr><td class="m"><b>--band-scheme</b></td><td class="def">materials_project</td><td>高対称 k 経路の決め方: materials_project / latimer_munro / setyawan_curtarolo / seekpath</td></tr>
+      <tr><td class="m"><b>--band-plotter</b></td><td class="def">auto</td><td>バンド図の描画器: auto / bsplotter / ezcal</td></tr>
       <tr><td class="m"><b>--emin</b> / <b>--emax</b></td><td class="def">-10 / 10</td><td>図のエネルギー窓（基準点からの eV）</td></tr>
       <tr><td class="m"><b>--plot</b></td><td class="def">matplotlib</td><td>matplotlib / plotly / both / none</td></tr>
       <tr><td class="m"><b>--dpi</b> &lt;int&gt;</td><td class="def">200</td><td>PNG の解像度</td></tr>
@@ -819,10 +886,12 @@ suggested for this set: <b>ecutwfc=58.0 Ry, ecutrho=464.0 Ry</b></div>
       <tr><td class="m">nscf.occupations</td><td class="def">tetrahedra</td><td>nscf 段の占有数</td></tr>
       <tr><td class="m">nscf.nbnd_extra_ratio</td><td class="def">0.3</td><td>空バンドの割合</td></tr>
       <tr><td class="m">nscf.conv_thr_scale</td><td class="def">0.1</td><td>nscf の閾値＝scf × この値</td></tr>
-      <tr><td class="m">bands.line_density</td><td class="def">25</td><td>経路の k 点密度（1/Å あたり）</td></tr>
+      <tr><td class="m">bands.scheme</td><td class="def">materials_project</td><td>k 経路の決め方（materials_project / latimer_munro / setyawan_curtarolo / seekpath）</td></tr>
+      <tr><td class="m">bands.plotter</td><td class="def">auto</td><td>バンド図の描画器（auto / bsplotter / ezcal）</td></tr>
+      <tr><td class="m">bands.line_density</td><td class="def">25</td><td>経路の k 点密度（1/Å あたり。MP 本家は 20）</td></tr>
       <tr><td class="m">bands.min_points_per_segment</td><td class="def">6</td><td>1 区間の最小点数</td></tr>
       <tr><td class="m">bands.nbnd_extra_ratio</td><td class="def">0.4</td><td>空バンドの割合</td></tr>
-      <tr><td class="m">bands.symprec</td><td class="def">1e-5</td><td>seekpath の対称性判定精度</td></tr>
+      <tr><td class="m">bands.symprec</td><td class="def">1e-5</td><td>経路生成の対称性判定精度</td></tr>
       <tr><td class="m">bands.emin / emax</td><td class="def">null</td><td>図の窓（基準点からの eV）</td></tr>
       <tr><td class="m">dos.degauss</td><td class="def">0.01</td><td>dos.x の広がり（<b>Ry</b>）</td></tr>
       <tr><td class="m">dos.deltae</td><td class="def">0.02</td><td>エネルギー格子の刻み（<b>eV</b>）</td></tr>
@@ -1106,7 +1175,7 @@ export OMP_NUM_THREADS={{OMP_NUM_THREADS}}
       <tr><td class="m">--hubbard-u</td><td class="m">LDAU / LDAUTYPE / LDAUL / LDAUU / LDAUJ / LMAXMIX</td></tr>
       <tr><td class="m">--vdw grimme-d3</td><td class="m">IVDW</td></tr>
       <tr><td class="m">--kmesh / --kspacing</td><td class="m">KPOINTS（Gamma または Monkhorst）</td></tr>
-      <tr><td class="m">bands</td><td class="m">KPOINTS explicit（seekpath の経路をそのまま）</td></tr>
+      <tr><td class="m">bands</td><td class="m">KPOINTS explicit（生成した経路をそのまま）</td></tr>
     </tbody>
   </table>
   </div>
@@ -1648,7 +1717,8 @@ rows = []
     <dt>PDOS</dt><dd>状態密度を原子・軌道（s, p, d）ごとに分解したもの。どの軌道がどのバンドを作っているか分かる。</dd>
     <dt>vc-relax</dt><dd>セル（格子ベクトル）と原子位置を同時に最適化する計算。relax はセルを固定。</dd>
     <dt>primitive cell</dt><dd>結晶を表現する最小の単位胞。同じ結晶でも取り方が複数あるので、ezcal は標準形に揃える。</dd>
-    <dt>高対称線</dt><dd>バンド図の横軸。Γ, X, L のような特別な k 点を結んだ経路で、seekpath が結晶構造から決める。</dd>
+    <dt>高対称線</dt><dd>バンド図の横軸。Γ, X, L のような特別な k 点を結んだ経路で、結晶構造から自動で決まる。既定は Materials Project と同じ Latimer-Munro 経路 + 一筆書き化で、切れ目が生じない。</dd>
+    <dt>経路の切れ目</dt><dd>目盛りが <code>U|K</code> のように書かれる場所。ここで経路はブリルアンゾーン内の別の点へ飛ぶので、バンドの値が不連続になるのが正しい。図でも線を繋がない。既定の MP 方式では一筆書きにするので切れ目自体が出ない。</dd>
     <dt>強磁性 / 反強磁性</dt><dd>磁気モーメントが揃っているのが強磁性、隣り合う副格子で逆を向いて打ち消し合うのが反強磁性。後者は正味の磁化がほぼ 0 になる。</dd>
     <dt>副格子</dt><dd>同じ元素でも磁気モーメントの向きが違うサイトの集まり。ezcal は <code>Ni1</code>, <code>Ni2</code> というラベルで区別し、pw.x にも別 species として渡す。</dd>
     <dt>磁気単位胞</dt><dd>磁気秩序まで含めて周期性が閉じるセル。反強磁性では化学式上の最小セルより大きくなる。</dd>

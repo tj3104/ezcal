@@ -173,7 +173,7 @@ class Workflow:
         prev: CalcResult | None = None
 
         for index, step in enumerate(steps):
-            # バンド経路はセルを固定してしまうため、scf の前に seekpath の
+            # バンド経路はセルを固定してしまうため、scf の前に経路が基準とする
             # プリミティブセルへ切り替え、以降のステップ全体で共有する
             if "bands" in steps and step == "scf" and kpath is None:
                 kpath, structure = self._prepare_band_path(structure)
@@ -238,14 +238,15 @@ class Workflow:
             line_density=float(self.config.get("bands.line_density", 25)),
             symprec=float(self.config.get("bands.symprec", 1e-5)),
             min_points=int(self.config.get("bands.min_points_per_segment", 6)),
+            scheme=self.config.get("bands.scheme"),
         )
         primitive = kpath.primitive_structure
         if primitive is not None and len(primitive) != len(structure):
-            self.log(f"    バンド経路: seekpath のプリミティブセルを使用します "
+            self.log(f"    バンド経路: 標準プリミティブセルを使用します "
                      f"({len(structure)} -> {len(primitive)} 原子)")
         path_text = " -> ".join(dict.fromkeys(
             [lab for _, lab in kpath.labels if lab]))
-        self.log(f"    k 経路 ({kpath.nkpt} 点): {path_text}")
+        self.log(f"    k 経路 ({kpath.scheme}, {kpath.nkpt} 点): {path_text}")
         return kpath, primitive if primitive is not None else structure
 
     def _nscf_mesh(self, structure) -> list[int]:
@@ -300,7 +301,8 @@ class Workflow:
         if bands is not None and bands.ok and "eigenvalues" in bands.data:
             result.plots += plotting.plot_bands(
                 bands, plots_dir, backends, fermi=fermi, emin=emin, emax=emax,
-                dpi=dpi, title=f"{self.label} band structure", zero=zero)
+                dpi=dpi, title=f"{self.label} band structure", zero=zero,
+                plotter=self.config.get("bands.plotter", "auto"))
             result.exports.append(
                 plotting.export_bands_csv(bands, plots_dir / "bands.csv", fermi))
         if dos is not None and dos.ok:

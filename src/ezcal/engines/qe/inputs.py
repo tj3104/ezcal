@@ -279,6 +279,23 @@ class PwInput:
         return path
 
 
+def kpath_payload(kpath) -> dict:
+    """バンド経路を JSON へ落とせる形にする。
+
+    ``reciprocal_lattice`` と ``raw_labels`` は、あとから pymatgen の
+    ``BandStructureSymmLine`` を組み直して BSPlotter で描くために要る。
+    """
+    recip = kpath.reciprocal_lattice
+    return {
+        "scheme": kpath.scheme,
+        "distances": kpath.distances.tolist(),
+        "labels": [[int(i), lab] for i, lab in kpath.labels],
+        "raw_labels": [[int(i), lab] for i, lab in kpath.raw_labels],
+        "kpoints": kpath.kpoints.tolist(),
+        "reciprocal_lattice": None if recip is None else np.asarray(recip).tolist(),
+    }
+
+
 # ------------------------------------------------------------------ 後処理
 def dos_input(prefix: str, outdir: str, config, fname: str) -> str:
     values: dict[str, Any] = {

@@ -168,6 +168,8 @@ def _build_config(**kw) -> Config:
     put("run.nproc", kw.get("nproc"))
     put("output.dpi", kw.get("dpi"))
     put("bands.line_density", kw.get("line_density"))
+    put("bands.scheme", kw.get("band_scheme"))
+    put("bands.plotter", kw.get("band_plotter"))
     put("bands.emin", kw.get("emin"))
     put("bands.emax", kw.get("emax"))
 
@@ -393,6 +395,13 @@ def _make_command(task: str):
         # --- バンド / 状態密度 -------------------------------------------
         line_density: Optional[float] = typer.Option(
             None, "--line-density", help="バンド経路上の k 点密度 (1/Ang あたり)"),
+        band_scheme: Optional[str] = typer.Option(
+            None, "--band-scheme",
+            help="高対称 k 経路の決め方: materials_project (既定) | latimer_munro "
+                 "| setyawan_curtarolo | seekpath"),
+        band_plotter: Optional[str] = typer.Option(
+            None, "--band-plotter",
+            help="バンド図の描画器: auto (既定) | bsplotter | ezcal"),
         emin: Optional[float] = typer.Option(None, help="プロット窓の下限 (E_F 基準の eV)"),
         emax: Optional[float] = typer.Option(None, help="プロット窓の上限 (E_F 基準の eV)"),
         # --- 実行 --------------------------------------------------------
@@ -1175,6 +1184,10 @@ def info(
     kspacing: float = typer.Option(0.25, help="推奨 k メッシュの算出に使う間隔"),
     mp_api_key: Optional[str] = typer.Option(None, "--mp-api-key", envvar="MP_API_KEY"),
     band_path_only: bool = typer.Option(False, "--band-path", help="k 経路も表示する"),
+    band_scheme: str = typer.Option(
+        "materials_project", "--band-scheme",
+        help="k 経路の決め方: materials_project | latimer_munro "
+             "| setyawan_curtarolo | seekpath"),
 ) -> None:
     """構造を調べます: 対称性、推奨 k メッシュ、擬ポテンシャル、カットオフ。"""
     from ezcal.pseudo import PseudoManager
@@ -1195,8 +1208,8 @@ def info(
     except Exception as exc:
         console.print(f"[yellow]擬ポテンシャルを取得できません[/]: {exc}")
     if band_path_only:
-        path = band_path(struct)
-        console.print(f"k 経路 ({path.nkpt} 点): "
+        path = band_path(struct, scheme=band_scheme)
+        console.print(f"k 経路 ({path.scheme}, {path.nkpt} 点): "
                       + " -> ".join(dict.fromkeys(l for _, l in path.labels if l)))
 
 
@@ -1330,6 +1343,9 @@ def replot(
     charge_map_source: str = typer.Option(
         "auto", "--charge-map-source",
         help="3D マッピングに使う量: auto | bader_charge | lowdin_charge | moment_sphere"),
+    band_plotter: str = typer.Option(
+        "auto", "--band-plotter",
+        help="バンド図の描画器: auto (既定) | bsplotter | ezcal"),
 ) -> None:
     """完了済みの計算結果から図を描き直します (再計算はしません)。
 
@@ -1384,7 +1400,8 @@ def replot(
     if bands_result is not None:
         written += plotting.plot_bands(bands_result, plots_dir, backends, fermi=fermi,
                                        emin=emin, emax=emax, dpi=dpi, zero=zero,
-                                       title=f"{label} band structure")
+                                       title=f"{label} band structure",
+                                       plotter=band_plotter)
     if dos_result is not None:
         written += plotting.plot_dos(dos_result, plots_dir, backends, fermi=fermi,
                                      emin=emin, emax=emax, dpi=dpi, zero=zero,

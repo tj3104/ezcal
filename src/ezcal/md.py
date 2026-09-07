@@ -359,7 +359,8 @@ def run_dynamics(config, structure, rundir: str | Path, mode: str | None = None,
     except ImportError as exc:                       # pragma: no cover - 依存の有無
         raise DynamicsError(
             "material-mc がインストールされていません:  "
-            "uv pip install -e ~/repos/material_monte_carlo/mc") from exc
+            "pip install -e '.[md]'  (ローカルのソースから入れる場合は "
+            "pip install -e /path/to/material_monte_carlo/mc)") from exc
 
     spec = get_mode(mode or _get(config, "mode", "md"))
     rundir = Path(rundir)

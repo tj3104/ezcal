@@ -142,7 +142,20 @@ nscf:
 
 # ------------------------------ バンド -----------------------------
 bands:
+  scheme: materials_project       # 高対称 k 経路の決め方
+                                  #   materials_project: Latimer-Munro 経路を
+                                  #     get_continuous_path で一筆書きにしたもの。
+                                  #     Materials Project のバンド図と同じ横軸で、
+                                  #     経路に切れ目が生じない
+                                  #   latimer_munro:      同じ経路を連続化せずに使う
+                                  #   setyawan_curtarolo: pymatgen の SC (2010) 経路
+                                  #   seekpath:           seekpath の HPKOT (Hinuma 2017)
+  plotter: auto                   # バンド図の描画器
+                                  #   auto:      pymatgen 経路なら BSPlotter
+                                  #   bsplotter: pymatgen の BSPlotter を常に使う
+                                  #   ezcal:     従来の自前描画を使う
   line_density: 25                # 経路長 (2*pi/Angstrom) あたりの k 点数
+                                  # (Materials Project 本家は 20)
   min_points_per_segment: 6
   nbnd_extra_ratio: 0.4
   symprec: 1.0e-5

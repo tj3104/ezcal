@@ -294,6 +294,7 @@ class VaspEngine(Engine):
                 line_density=float(self.config.get("bands.line_density", 25)),
                 symprec=float(self.config.get("bands.symprec", 1e-5)),
                 min_points=int(self.config.get("bands.min_points_per_segment", 6)),
+                scheme=self.config.get("bands.scheme"),
             )
         self.write_inputs(structure, task, workdir, kmesh=kwargs.get("kmesh"), kpath=kpath)
 
@@ -449,11 +450,9 @@ class VaspEngine(Engine):
                 result.homo, result.lumo = gap["vbm"], gap["cbm"]
 
         if result.task == "bands" and kpath is not None:
-            result.data["kpath"] = {
-                "distances": kpath.distances.tolist(),
-                "labels": [[int(i), label] for i, label in kpath.labels],
-                "kpoints": kpath.kpoints.tolist(),
-            }
+            from ezcal.engines.qe.inputs import kpath_payload
+
+            result.data["kpath"] = kpath_payload(kpath)
 
     def _parse_dos(self, result: CalcResult, run) -> None:
         from pymatgen.electronic_structure.core import Orbital, Spin

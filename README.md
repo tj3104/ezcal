@@ -70,7 +70,7 @@ ezcal scf Si.cif --set qe.bin_dir=/opt/qe/bin    # 1 回だけ上書きする場
 | k 点メッシュ | `dft.kspacing` (既定 0.25 Å⁻¹、2π 込み) から逆格子ベクトル長で決定 |
 | nscf メッシュ | scf メッシュ × `nscf.kmesh_scale` (既定 2)、`occupations=tetrahedra` |
 | バンド数 | 価電子数から占有バンド + 30〜40 % の空バンド |
-| バンド経路 | seekpath の標準経路。**セルも seekpath の primitive cell に揃えてから scf を回す**ので経路と電荷密度が必ず整合する |
+| バンド経路 | 既定は **Materials Project 方式** (pymatgen Latimer-Munro + `get_continuous_path`、切れ目なし)。`--band-scheme` で `setyawan_curtarolo` / `seekpath` にも切り替え可。**どの方式でも、その経路が基準とする標準 primitive cell に揃えてから scf を回す**ので経路と電荷密度が必ず整合する |
 | 価電子数 | UPF の `z_valence` |
 | バンドギャップ | 電子数から占有バンド数を数えて VBM/CBM を決定 (smearing で E_F が VBM より下に来ても金属と誤判定しない) |
 
@@ -160,8 +160,8 @@ ezcal scf  Cr.cif  --magmom Cr=1.0/-1.0        # --afm Cr=1.0 と同じ
   (例: NiO なら岩塩型の primitive cell ではなく AFM-II の菱面体 4 原子セル)。
   副格子を指定すると ezcal は自動で `--as-is` に切り替え、セルを縮約しません。
 - サイト数が足りないときはその場でエラーになります。
-- バンド計算では seekpath にも副格子を別 species として渡すため、
-  磁気単位胞に対応した正しいブリルアンゾーンと経路が使われます。
+- バンド計算では経路生成器にも副格子を別 species (pymatgen 方式ではダミー元素) として
+  渡すため、磁気単位胞に対応した正しいブリルアンゾーンと経路が使われます。
 - 結果には正味の磁化 `M` と絶対磁化 `|M|`、レポートにはサイトごとの磁気モーメントが出ます。
 
 ## 6. 設定ファイル `qe_config.yaml`
@@ -269,7 +269,7 @@ vasp:
   `--conv-thr` → EDIFF、`--spin`/`--magmom`/`--afm` → ISPIN + サイトごとの MAGMOM、
   `--hubbard-u` → LDAU 一式)。`--magmom` の値は QE では価電子数に対する割合、
   VASP では μB としてそのまま渡されます。
-- バンド計算の KPOINTS は seekpath の経路をそのまま explicit 形式で書きます。
+- バンド計算の KPOINTS は生成した経路をそのまま explicit 形式で書きます。
 - DOS/PDOS・バンドの作図は QE と同じ経路を通るので、図も CSV も同じ形式で出ます。
 
 VASP を実際に走らせるには `vasp.command` に実行ファイル、`vasp.potcar_dir` に
@@ -468,7 +468,76 @@ def build(model=None, device="cpu", **options):
 （EMT のようにモデルの概念が無いレシピには渡りません）。その他の引数は
 `--calc-option key=value`（設定では `mlip.options`）で渡します。
 
-## 15. テスト
+
+## 15. バンド経路と作図方式
+
+`bands.scheme` で高対称 k 経路の決め方を選びます。
+
+| 値 | 中身 | 切れ目 |
+|---|---|---|
+| `materials_project` (既定) | Latimer-Munro 経路を `get_continuous_path()` で一筆書き（オイラー路）に組み直したもの | **なし** |
+| `latimer_munro` | 同じ Latimer-Munro 経路を連続化せずそのまま | あり |
+| `setyawan_curtarolo` | pymatgen の Setyawan-Curtarolo (2010) 経路 | あり |
+| `seekpath` | seekpath の HPKOT 経路 (Hinuma 2017) | あり |
+
+既定は **Materials Project のバンド図と同じ方式**です。pymatgen の
+`HighSymmKpath(structure, path_type="latimer_munro")` で経路を作り、
+`HighSymmKpath.get_continuous_path()` に掛けてグラフ理論でオイラー路
+（奇数次数の頂点間に辺を足した一筆書き）にします。出典は Munro, Latimer,
+Horton, Dwaraknath, Persson, *npj Comput. Mater.* **6**, 112 (2020)。
+
+ラベルは Latimer-Munro 独自の体系（`a`, `c`, `d`, `e`, `g` … と `Γ`）で、
+`X`, `M`, `R` のような古典的な名前は使いません。古典的な名前が欲しい場合は
+`--band-scheme setyawan_curtarolo` か `seekpath` を選んでください。
+
+```bash
+ezcal bands POSCAR                                    # 既定 = MP 方式（連続）
+ezcal bands POSCAR --band-scheme setyawan_curtarolo   # 古典的なラベル
+ezcal bands POSCAR --band-scheme seekpath             # 従来の seekpath
+ezcal info POSCAR --band-path                         # 経路だけ確認する
+```
+
+k 点は **Materials Project / VASP の line mode と同じく区間ごとに独立して**
+並べます。区間のつなぎ目では同じ k 点が 2 度現れますが、そのおかげで高対称点が
+すべて区間の端になり、pymatgen 側でブランチと目盛りを正しく組めます。
+
+### コスト
+
+オイラー路は全ての高対称線を通り、一部を 2 度通るため k 点が増えます
+（ベンチマーク 39 系・`line_density=12` の合計）。
+
+| 方式 | k 点数 | 比 |
+|---|---|---|
+| `seekpath` | 3,791 | ×1.00 |
+| `setyawan_curtarolo` | 4,475 | ×1.18 |
+| `latimer_munro` | 5,731 | ×1.51 |
+| `materials_project` (既定) | 7,090 | ×1.87 |
+
+バンド段は非自己無撞着なので k 点数に比例します。軽くしたい場合は
+`--band-scheme latimer_munro`（連続化なし）か `seekpath` を使ってください。
+
+### 作図方式
+
+`bands.plotter` (`--band-plotter`) でバンド図の描画器を選びます。
+
+| 値 | 動作 |
+|---|---|
+| `auto` (既定) | pymatgen 経路（`materials_project` を含む）なら pymatgen の `BSPlotter`、`seekpath` なら ezcal 自前の描画 |
+| `bsplotter` | 常に `BSPlotter` を使う (Materials Project と同じ見た目) |
+| `ezcal` | 常に自前の描画を使う (plotly 出力・バンド+DOS 併記図はこちら) |
+
+逆格子情報を持たない古い実行結果は `BSPlotter` で描けないため、自動的に自前の
+描画へフォールバックします。
+
+### 経路の切れ目について
+
+既定の `materials_project` では切れ目が生じません（ベンチマーク 39 系すべてで
+切れ目 0 を確認済み）。それ以外の方式では `U|K` や `Z|X` のような切れ目が残ります。
+切れ目の両側はブリルアンゾーン内の**別の点**なので、そこでバンドの値が飛ぶのは
+正しい挙動です（切れ目の両端が対称等価な場合、例えば fcc の `U|K` では飛び幅が
+厳密に 0 になり、図の上では連続に見えます）。作図側は切れ目で線を繋ぎません。
+
+## 16. テスト
 
 ```bash
 python -m pytest tests -q       # 108 件、QE 不要

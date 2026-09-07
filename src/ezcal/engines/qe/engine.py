@@ -152,6 +152,7 @@ class QEEngine(Engine):
                     line_density=float(cfg.get("bands.line_density", 25)),
                     symprec=float(cfg.get("bands.symprec", 1e-5)),
                     min_points=int(cfg.get("bands.min_points_per_segment", 6)),
+                    scheme=cfg.get("bands.scheme"),
                 )
             explicit = kpath.kpoints
         elif kmesh is None:
@@ -230,11 +231,7 @@ class QEEngine(Engine):
             self._attach_xml(result, xml, structure, kmesh)
         result.files["xml"] = str(xml)
         if task == "bands" and kpath is not None:
-            result.data["kpath"] = {
-                "distances": kpath.distances.tolist(),
-                "labels": [[int(i), lab] for i, lab in kpath.labels],
-                "kpoints": kpath.kpoints.tolist(),
-            }
+            result.data["kpath"] = qein.kpath_payload(kpath)
         result.ok = bool(result.converged or task in {"nscf", "bands"})
         if not result.ok and result.energy is not None:
             result.ok = True
