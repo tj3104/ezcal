@@ -230,7 +230,7 @@ footer p{font-family:var(--sans); font-size:.82rem}
 <aside class="side">
   <div class="brand">
     <span class="n">ezcal</span>
-    <span class="v">0.1.0 · ハンドブック</span>
+    <span class="v">0.2.0 · ハンドブック</span>
   </div>
   <div class="levelbox">
     <span class="cap">表示</span>
@@ -253,8 +253,10 @@ footer p{font-family:var(--sans); font-size:.82rem}
       <li><a href="#api" data-lv="a"><span class="k">09</span>Python API</a></li>
       <li><a href="#trouble" data-lv="b"><span class="k">10</span>困ったときは</a></li>
       <li><a href="#charge" data-lv="b"><span class="k">11</span>電荷密度と原子電荷</a></li>
-      <li><a href="#bench" data-lv="b"><span class="k">12</span>ベンチマークで確認</a></li>
-      <li><a href="#gloss" data-lv="b"><span class="k">13</span>用語ミニ辞典</a></li>
+      <li><a href="#md" data-lv="b"><span class="k">12</span>MD とモンテカルロ</a></li>
+      <li><a href="#mlip" data-lv="a"><span class="k">13</span>ポテンシャルの切り替え</a></li>
+      <li><a href="#bench" data-lv="b"><span class="k">14</span>ベンチマークで確認</a></li>
+      <li><a href="#gloss" data-lv="b"><span class="k">15</span>用語ミニ辞典</a></li>
     </ol>
   </nav>
 </aside>
@@ -269,6 +271,7 @@ footer p{font-family:var(--sans); font-size:.82rem}
       <span class="fact">python <b>≥ 3.10</b></span>
       <span class="fact">venv <b>ezcalenv312</b></span>
       <span class="fact">also <b>SevenNet (MLIP)</b></span>
+      <span class="fact">md/mc <b>material-mc</b></span>
     </div>
     <div class="note">
       <b>このページの読み方</b>
@@ -283,15 +286,17 @@ footer p{font-family:var(--sans); font-size:.82rem}
   <p class="lead">インストールして、Si のバンド構造と状態密度を出すところまで。</p>
 
   <h3><span class="h">1</span>インストール</h3>
-  <p>仮想環境を有効にして、リポジトリを editable で入れます。依存パッケージ（pymatgen・ASE・seekpath・matplotlib・plotly ほか）も一緒に入ります。</p>
-  <div class="cmd"><pre><span class="p">$</span> <b>source /home/tajimamainpc/.venv/ezcalenv312/bin/activate</b>
-<span class="p">$</span> <b>uv pip install -e /home/tajimamainpc/06_claude_code/08_qez</b>
+  <p>Python 3.10 以上の仮想環境を用意し、リポジトリを editable で入れます。依存パッケージ（pymatgen・ASE・seekpath・matplotlib・plotly ほか）も一緒に入ります。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>python3 -m venv ~/.venv/ezcal &amp;&amp; source ~/.venv/ezcal/bin/activate</b>
+<span class="p">$</span> <b>cd /path/to/ezcal</b>              <span class="c"># このリポジトリを置いた場所</span>
+<span class="p">$</span> <b>uv pip install -e .</b>            <span class="c"># uv が無ければ pip install -e . でも可</span>
 <span class="p">$</span> <b>ezcal version</b>
-<span class="c">ezcal 0.1.0  (python 3.12.3)</span></pre></div>
-  <p style="margin-top:.9rem">Materials Project から構造を取りたいときや、機械学習ポテンシャルを使いたいときは追加で入れます。</p>
-  <div class="cmd"><pre><span class="p">$</span> <b>uv pip install -e '/home/tajimamainpc/06_claude_code/08_qez[all]'</b>   <span class="c"># + mp-api, jupyter</span>
-<span class="p">$</span> <b>uv pip install sevenn</b>                                              <span class="c"># SevenNet (MLIP)</span>
-<span class="p">$</span> <b>uv pip install aiida-vasp</b>                                          <span class="c"># mock-vasp (VASP 再生)</span></pre></div>
+<span class="c">ezcal 0.2.0  (python 3.12.3)</span></pre></div>
+  <p style="margin-top:.9rem">Materials Project から構造を取りたいときや、機械学習ポテンシャル・MD/MC を使いたいときは追加で入れます。</p>
+  <div class="cmd"><pre><span class="p">$</span> <b>uv pip install -e '.[all]'</b>        <span class="c"># + mp-api, jupyter</span>
+<span class="p">$</span> <b>uv pip install sevenn</b>             <span class="c"># SevenNet (MLIP)</span>
+<span class="p">$</span> <b>uv pip install material-mc</b>        <span class="c"># MD / モンテカルロ（12 章）</span>
+<span class="p">$</span> <b>uv pip install aiida-vasp</b>         <span class="c"># mock-vasp (VASP 再生)</span></pre></div>
 
   <h3><span class="h">2</span>Quantum ESPRESSO の場所を確認</h3>
   <p><code>pw.x</code> は既定で <code>~/repos/q-e/bin</code> から探します。違う場所にあるなら設定ファイルで変えます（<a href="#conf">06 章</a>）。まず今の状態を確認しましょう。</p>
@@ -350,7 +355,13 @@ k-path (131 points): <b>Γ -&gt; X -&gt; U|K -&gt; Γ -&gt; L -&gt; W -&gt; X</b
       <tr><td class="m"><b>ezcal nscf</b></td><td>密な k 点での非自己無撞着計算</td><td class="m">scf → nscf</td></tr>
       <tr><td class="m"><b>ezcal bands</b></td><td>高対称線に沿ったバンド構造</td><td class="m">scf → bands</td></tr>
       <tr><td class="m"><b>ezcal dos</b></td><td>全 DOS と軌道射影 DOS（PDOS）</td><td class="m">scf → nscf → dos</td></tr>
+      <tr><td class="m"><b>ezcal charge</b></td><td>電荷密度の cube と原子電荷、3D 図（<a href="#charge">11 章</a>）</td>
+          <td class="m">scf → dos → charge</td></tr>
       <tr><td class="m"><b>ezcal auto</b></td><td>初期構造から全部</td><td class="m">vc-relax → scf → nscf → dos → bands</td></tr>
+      <tr><td class="m"><b>ezcal md</b></td><td>分子動力学（NVE/NVT/NPT/NPH。<a href="#md">12 章</a>）</td>
+          <td class="m">MLIP で MD</td></tr>
+      <tr><td class="m"><b>ezcal mc</b></td><td>モンテカルロ（MCMC / MCMD / kMC / event-kMC。<a href="#md">12 章</a>）</td>
+          <td class="m">MLIP で MC</td></tr>
     </tbody>
   </table>
   </div>
@@ -368,9 +379,12 @@ k-path (131 points): <b>Γ -&gt; X -&gt; U|K -&gt; Γ -&gt; L -&gt; W -&gt; X</b
       <tr><td class="m"><b>ezcal config show</b></td><td>いま効いている設定と、それをどのファイルから読んだか。<code>--flat</code> で 1 行 1 キー</td></tr>
       <tr><td class="m"><b>ezcal pseudo list</b> Fe</td><td>その元素で選べる擬ポテンシャル一覧（先頭の <code>*</code> が既定で選ばれるもの）</td></tr>
       <tr><td class="m"><b>ezcal pseudo fetch</b> Si O</td><td>擬ポテンシャルを取得して、種類・価電子数・推奨カットオフを表示</td></tr>
-      <tr><td class="m"><b>ezcal charge</b> STRUCT</td><td>電荷密度と原子電荷（<a href="#charge">11 章</a>）</td></tr>
+      <tr><td class="m"><b>ezcal mlip list</b></td><td>使える MLIP レシピと、この環境で読み込めるか（<a href="#mlip">13 章</a>）</td></tr>
+      <tr><td class="m"><b>ezcal mlip check</b></td><td>いまの設定でどの calculator になるか。<code>--build</code> で実際に作って試す</td></tr>
+      <tr><td class="m"><b>ezcal mlip modes</b></td><td>MD / MC で選べるモードの一覧</td></tr>
+      <tr><td class="m"><b>ezcal mlip template</b></td><td>自前ポテンシャル用スクリプトの雛形を書き出す</td></tr>
       <tr><td class="m"><b>ezcal bench list</b></td><td>ベンチマーク対象と参照値の一覧</td></tr>
-      <tr><td class="m"><b>ezcal bench run</b></td><td>金属20＋酸化物20を流す（<a href="#bench">11 章</a>）</td></tr>
+      <tr><td class="m"><b>ezcal bench run</b></td><td>金属20＋酸化物20を流す（<a href="#bench">14 章</a>）</td></tr>
       <tr><td class="m"><b>ezcal bench report</b> DIR</td><td>実験値・Materials Project との予実比較</td></tr>
       <tr><td class="m"><b>ezcal vasp registry</b></td><td>mock-vasp が再生できる記録済み計算の一覧</td></tr>
       <tr><td class="m"><b>ezcal vasp record</b> DIR</td><td>計算済みの VASP ディレクトリをレジストリに登録する</td></tr>
@@ -639,6 +653,44 @@ suggested for this set: <b>ecutwfc=58.0 Ry, ecutrho=464.0 Ry</b></div>
 
   <div class="tw">
   <table>
+    <caption>電荷密度・原子電荷（charge タスク）</caption>
+    <thead><tr><th>オプション</th><th>既定</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td class="m"><b>--charge-kinds</b> density,spin</td><td class="def">density</td>
+          <td>pp.x で出す量（density / spin / ae_valence / ae_total / potential）</td></tr>
+      <tr><td class="m"><b>--no-bader</b></td><td class="def">off</td><td>Bader 分割を行わない</td></tr>
+      <tr><td class="m"><b>--no-isosurface</b></td><td class="def">off</td><td>3D 等値面を描かない</td></tr>
+      <tr><td class="m"><b>--iso-level</b> &lt;float&gt;</td><td class="def">自動</td>
+          <td>等値面の値（e/bohr³）。複数回指定すると多重等値面になる</td></tr>
+      <tr><td class="m"><b>--no-charge-map</b></td><td class="def">off</td><td>価数の 3D マッピングを描かない</td></tr>
+      <tr><td class="m"><b>--charge-map-source</b></td><td class="def">auto</td>
+          <td>マッピングに使う量。auto / bader_charge / lowdin_charge / moment_sphere</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="tw">
+  <table>
+    <caption>ポテンシャル（<code>--engine mlip</code> と <code>ezcal md</code> / <code>mc</code> で共通）</caption>
+    <thead><tr><th>オプション</th><th>既定</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td class="m"><b>--mlip-backend</b></td><td class="def">sevennet</td>
+          <td>同梱レシピ名（sevennet / mace / chgnet / orb / matgl / emt / lj）</td></tr>
+      <tr><td class="m"><b>--model</b></td><td class="def">レシピ既定</td>
+          <td>モデル名または checkpoint のパス（例 <code>7net-l3i5</code>）</td></tr>
+      <tr><td class="m"><b>--device</b></td><td class="def">cpu</td><td>cpu / cuda / auto</td></tr>
+      <tr><td class="m"><b>--calc-script</b> &lt;path&gt;</td><td class="def">—</td>
+          <td>calculator を返す自前 Python スクリプト</td></tr>
+      <tr><td class="m"><b>--calc-factory</b> mod:attr</td><td class="def">—</td>
+          <td>既存ライブラリの関数・クラスを直接指定</td></tr>
+      <tr><td class="m"><b>--calc-option</b> key=value</td><td class="def">—</td>
+          <td>calculator への追加引数。複数回指定可</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="tw">
+  <table>
     <caption>実行方法</caption>
     <thead><tr><th>オプション</th><th>既定</th><th>意味</th></tr></thead>
     <tbody>
@@ -825,6 +877,66 @@ suggested for this set: <b>ecutwfc=58.0 Ry, ecutrho=464.0 Ry</b></div>
   </table>
   </div>
 
+  <div class="tw">
+  <table>
+    <caption>charge — 電荷密度と原子電荷（<a href="#charge">11 章</a>）</caption>
+    <thead><tr><th>キー</th><th>既定</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td class="m">charge.kinds</td><td class="def">[density]</td><td>pp.x で出す量</td></tr>
+      <tr><td class="m">charge.bader / bader_source</td><td class="def">true / density</td><td>Bader 分割と、その対象</td></tr>
+      <tr><td class="m">charge.slice_axis / slice_fraction</td><td class="def">null / 0.5</td><td>2D 断面の向きと位置</td></tr>
+      <tr><td class="m">charge.isosurface</td><td class="def">true</td><td>3D 等値面を描くか</td></tr>
+      <tr><td class="m">charge.isosurface_grid</td><td class="def">64</td><td>等値面計算前のダウンサンプル（軸あたり点数）</td></tr>
+      <tr><td class="m">charge.isosurface_levels</td><td class="def">null（自動）</td><td>等値面の値のリスト（e/bohr³）</td></tr>
+      <tr><td class="m">charge.isosurface_opacity</td><td class="def">0.45</td><td>等値面の不透明度</td></tr>
+      <tr><td class="m">charge.map3d</td><td class="def">true</td><td>原子の価数を 3D にマッピングするか</td></tr>
+      <tr><td class="m">charge.map_source</td><td class="def">auto</td><td>マッピングに使う量（auto / bader_charge / lowdin_charge / moment_sphere）</td></tr>
+      <tr><td class="m">charge.keep_cube</td><td class="def">true</td><td>cube ファイルを残すか（1 つ数 MB）</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="tw">
+  <table>
+    <caption>mlip — ポテンシャルの指定（<a href="#mlip">13 章</a>）</caption>
+    <thead><tr><th>キー</th><th>既定</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td class="m">mlip.backend</td><td class="def">sevennet</td><td>同梱レシピ名</td></tr>
+      <tr><td class="m">mlip.model</td><td class="def">null</td><td>モデル名 / checkpoint。null ならレシピの既定</td></tr>
+      <tr><td class="m">mlip.device</td><td class="def">cpu</td><td>cpu / cuda / auto</td></tr>
+      <tr><td class="m">mlip.options</td><td class="def">{}</td><td>build() へ渡す追加引数（例 <code>{modal: mpa}</code>）</td></tr>
+      <tr><td class="m">mlip.script</td><td class="def">null</td><td>calculator を返す自前 Python ファイル</td></tr>
+      <tr><td class="m">mlip.factory</td><td class="def">null</td><td><code>module:attribute</code> 形式の import パス</td></tr>
+      <tr><td class="m">mlip.recipe_dirs</td><td class="def">[]</td><td>追加のレシピ置き場</td></tr>
+      <tr><td class="m">mlip.fmax / steps / optimizer / filter</td><td class="def">0.02 / 300 / FIRE / frechet</td>
+          <td><code>--engine mlip</code> の構造最適化</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="tw">
+  <table>
+    <caption>md — MD とモンテカルロ（<a href="#md">12 章</a>）</caption>
+    <thead><tr><th>キー</th><th>既定</th><th>キー</th><th>既定</th></tr></thead>
+    <tbody>
+      <tr><td class="m">md.mode</td><td class="def">md</td><td class="m">md.energy_mode</td><td class="def">total</td></tr>
+      <tr><td class="m">md.temperature_K</td><td class="def">300.0</td><td class="m">md.n_swap</td><td class="def">1</td></tr>
+      <tr><td class="m">md.supercell</td><td class="def">null</td><td class="m">md.species</td><td class="def">null</td></tr>
+      <tr><td class="m">md.seed</td><td class="def">null</td><td class="m">md.swap_pairs</td><td class="def">null</td></tr>
+      <tr><td class="m">md.steps</td><td class="def">500</td><td class="m">md.shuffle</td><td class="def">false</td></tr>
+      <tr><td class="m">md.ensemble</td><td class="def">nvt</td><td class="m">md.save_interval</td><td class="def">10</td></tr>
+      <tr><td class="m">md.timestep_fs</td><td class="def">1.0</td><td class="m">md.neighbor_cutoff</td><td class="def">3.5</td></tr>
+      <tr><td class="m">md.ttime_fs</td><td class="def">25.0</td><td class="m">md.r0 / voronoi_cutoff</td><td class="def">null / 0.0</td></tr>
+      <tr><td class="m">md.pfactor_gpa_fs2</td><td class="def">null</td><td class="m">md.fmax / max_itr / optimizer</td><td class="def">0.05 / 200 / FIRE</td></tr>
+      <tr><td class="m">md.pressure_gpa</td><td class="def">0.0</td><td class="m">md.mobile_species</td><td class="def">null</td></tr>
+      <tr><td class="m">md.npt_mask</td><td class="def">null</td><td class="m">md.vacancy_count / vacancy_indices</td><td class="def">1 / null</td></tr>
+      <tr><td class="m">md.tchain</td><td class="def">3</td><td class="m">md.nu0_hz</td><td class="def">1e13</td></tr>
+      <tr><td class="m">md.cycles</td><td class="def">5</td><td class="m">md.barrier_method / n_images</td><td class="def">neb / 5</td></tr>
+      <tr><td class="m">md.mc_steps / md_steps</td><td class="def">20 / 100</td><td class="m">md.combine_traj / view_notebook</td><td class="def">true / false</td></tr>
+    </tbody>
+  </table>
+  </div>
+
   <h4>書き方の例</h4>
   <div class="cmd"><pre><span class="c"># qe_config.yaml — 研究室のクラスタ用</span>
 <b>qe:</b>
@@ -905,21 +1017,27 @@ export OMP_NUM_THREADS={{OMP_NUM_THREADS}}
   <div class="s-head"><span class="s-num">08</span><h2>エンジンを切り替える</h2><span class="badge a">応用</span></div>
   <p class="lead">CLI・設定・ワークフロー・作図は <code>CalcResult</code> しか見ないので、計算コードは差し替えられます。</p>
 
-  <h3>SevenNet（機械学習ポテンシャル）</h3>
+  <h3>MLIP / NNP（既定は SevenNet）</h3>
   <p>エネルギー・力・応力・構造最適化のみ。電子状態は扱えないので、bands / dos / nscf を頼まれたら
-     黙って別物を出さずに理由を返します。DFT の前段としての粗い緩和に向いています。</p>
+     黙って別物を出さずに理由を返します。DFT の前段としての粗い緩和に向いています。
+     <b>どのポテンシャルを使うかの指定は <a href="#mlip">13 章</a></b>、
+     MD / MC は <a href="#md">12 章</a> です。</p>
   <div class="cmd"><pre><span class="p">$</span> <b>ezcal vc-relax Si.cif --engine mlip</b>
 <span class="p">$</span> <b>ezcal auto Si.cif --engine mlip</b>                        <span class="c"># 電子状態の段は自動でスキップ</span>
-<span class="p">$</span> <b>ezcal scf Si.cif --engine mlip --set mlip.model=7net-l3i5</b>
+<span class="p">$</span> <b>ezcal scf Si.cif --engine mlip --model 7net-l3i5</b>       <span class="c"># モデルを切り替える</span>
+<span class="p">$</span> <b>ezcal relax Si.cif --engine mlip --calc-script my_potential.py</b>
 <span class="p">$</span> <b>ezcal bands Si.cif --engine mlip</b>
 <span class="c">  note: engine 'mlip' cannot run 'bands' (it supports: scf, relax, vc-relax)</span></pre></div>
   <div class="tw">
   <table>
     <thead><tr><th>キー</th><th>既定</th><th>意味</th></tr></thead>
     <tbody>
-      <tr><td class="m">mlip.backend</td><td class="def">sevennet</td><td>将来 mace / chgnet を足す口も用意済み</td></tr>
-      <tr><td class="m">mlip.model</td><td class="def">7net-0</td><td>チェックポイント名またはパス</td></tr>
-      <tr><td class="m">mlip.device</td><td class="def">cpu</td><td>cpu / cuda</td></tr>
+      <tr><td class="m">mlip.backend</td><td class="def">sevennet</td>
+          <td>同梱レシピ名（sevennet / mace / chgnet / orb / matgl / emt / lj）</td></tr>
+      <tr><td class="m">mlip.model</td><td class="def">null</td><td>モデル名またはパス。null ならレシピの既定</td></tr>
+      <tr><td class="m">mlip.device</td><td class="def">cpu</td><td>cpu / cuda / auto</td></tr>
+      <tr><td class="m">mlip.options / script / factory</td><td class="def">{} / null / null</td>
+          <td>追加引数、自前スクリプト、import パス（<a href="#mlip">13 章</a>）</td></tr>
       <tr><td class="m">mlip.fmax / steps</td><td class="def">0.02 / 300</td><td>力の閾値（eV/Å）と最大ステップ</td></tr>
       <tr><td class="m">mlip.optimizer</td><td class="def">FIRE</td><td>FIRE / BFGS / LBFGS</td></tr>
       <tr><td class="m">mlip.filter</td><td class="def">frechet</td><td>vc-relax のセルフィルタ（frechet / exp / unit）</td></tr>
@@ -1169,7 +1287,8 @@ rows = []
   <div class="cmd"><pre><span class="p">$</span> <b>ezcal charge MgO.cif --np 8</b>                   <span class="c"># scf → dos → charge</span>
 <span class="p">$</span> <b>ezcal charge NiO.cif --afm Ni=2.0 --np 8</b>      <span class="c"># スピン密度も自動で追加</span>
 <span class="p">$</span> <b>ezcal auto Si.cif --charge</b>                    <span class="c"># auto の最後に付ける</span>
-<span class="p">$</span> <b>ezcal charge X.cif --charge-kinds density,spin</b></pre></div>
+<span class="p">$</span> <b>ezcal charge X.cif --charge-kinds density,spin</b>
+<span class="p">$</span> <b>ezcal charge MgO.cif --plot both</b>              <span class="c"># 3D 図は png と html の両方</span></pre></div>
 
   <h3>出力</h3>
   <div class="tree"><b>ezcal_out/MgO_charge/</b>
@@ -1179,7 +1298,35 @@ rows = []
 └── plots/
       ├── <i>density_profile.png</i>             <span class="cm">各軸の平面平均（原子位置つき）</span>
       ├── <i>density_slice.png</i>               <span class="cm">3面の2D断面</span>
-      └── <i>density_isosurface.html</i>         <span class="cm">3D等値面（plotly、原子つき）</span></div>
+      ├── <i>density_isosurface.png/.html</i>    <span class="cm">3D等値面（空間マッピング）</span>
+      └── <i>charge_map.png/.html</i>            <span class="cm">原子の価数を 3D にマッピング</span></div>
+
+  <h3>3D で見る（等電荷面と価数マッピング）</h3>
+  <p>3D の図は 2 種類あり、<code>--plot</code> で選んだ両方のバックエンドで書き出されます。
+     <b>png</b> は marching cubes で三角形分割した静止画（報告書に貼れる）、
+     <b>html</b> は plotly で回転・拡大できる対話版です。</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>ファイル</th><th>何が見えるか</th></tr></thead>
+    <tbody>
+      <tr><td class="m">&lt;kind&gt;_isosurface.png / .html</td>
+          <td><b>電荷密度分布の 3D</b>。等電荷面を実空間に重ねて描き、原子（CPK 色）とセルの稜線も入る。
+              面は周期境界で閉じるので端で切れない。既定の等値面は密度分布の 92 / 99 パーセンタイル、
+              スピン密度は 0 を中心に ±（赤＝↑、青＝↓）</td></tr>
+      <tr><td class="m">charge_map.png / .html</td>
+          <td><b>価数の 3D マッピング</b>。原子を実座標に置き、<b>電荷で色</b>（赤＝陽イオン、青＝陰イオン）、
+              <b>|電荷| で大きさ</b>を変え、値を文字で添える。html 版は hover で Löwdin / Bader /
+              basin 体積も出る</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal charge MgO.cif --plot both --iso-level 0.05 --iso-level 0.5</b>   <span class="c"># 等値面を指定</span>
+<span class="p">$</span> <b>ezcal charge Fe.cif --spin --charge-kinds density,spin --plot both</b>
+<span class="p">$</span> <b>ezcal plot ezcal_out/Fe_charge_spin --charge-map-source moment_sphere</b>  <span class="c"># 磁気モーメントで塗る</span>
+<span class="p">$</span> <b>ezcal charge X.cif --no-isosurface --no-charge-map</b>                  <span class="c"># 3D を作らない</span></pre></div>
+  <p><code>ezcal plot &lt;実行ディレクトリ&gt;</code> は残っている <code>*.cube</code> と
+     <code>atomic_charges.csv</code> から図だけを作り直します（<b>再計算しません</b>）。
+     等値面の値やマッピングに使う量を変えて見比べるときに使ってください。</p>
 
   <h3>原子電荷は2通り出ます</h3>
   <div class="tw">
@@ -1235,8 +1382,167 @@ rows = []
 </section>
 
 <!-- ========================= 12 ========================= -->
+<section id="md" data-lv="b">
+  <div class="s-head"><span class="s-num">12</span><h2>MD とモンテカルロ</h2><span class="badge b">基本</span></div>
+  <p class="lead">機械学習ポテンシャルで分子動力学と配置サンプリングを走らせます。計算の中身は
+     <b>material-mc</b>（ASE ベースの MC/MD パッケージ）が担当し、ezcal は構造の読み込み・
+     calculator の用意・記録と作図を受け持ちます。</p>
+
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal md FePt.cif -T 900 --ensemble nvt --steps 2000</b>        <span class="c"># MD だけ</span>
+<span class="p">$</span> <b>ezcal md FePt.cif -T 900 --ensemble npt --npt-mask 0 0 1</b>    <span class="c"># z 軸だけ可変</span>
+<span class="p">$</span> <b>ezcal mc FePt.cif --mode mcmc --steps 1000 -T 1000</b>          <span class="c"># 元素スワップ MC</span>
+<span class="p">$</span> <b>ezcal mc FePt.cif --mode mcmd --cycles 10 --mc-steps 20 --md-steps 200</b>
+<span class="p">$</span> <b>ezcal mc LiCoO2.cif --mode event-kmc --mobile-species Li --vacancies 1</b>
+<span class="p">$</span> <b>ezcal mlip modes</b>                                            <span class="c"># モード一覧</span></pre></div>
+
+  <h3>モード</h3>
+  <p><code>ezcal md</code> は <code>--mode md</code>、<code>ezcal mc</code> は <code>--mode mcmc</code> から始まります。
+     どちらのコマンドでも <code>--mode</code> で下のどれでも選べます。</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th class="m">--mode</th><th>内容</th><th>主な引数</th></tr></thead>
+    <tbody>
+      <tr><td class="m">md<span class="d">（既定）</span></td>
+          <td>MC を挟まない純粋な MD。<b>N P V T E のどれを固定するか</b>を <code>--ensemble</code> で選ぶ</td>
+          <td class="m">--steps --ensemble --timestep --ttime --pressure --npt-mask</td></tr>
+      <tr><td class="m">mcmc</td><td>格子モンテカルロ（元素スワップ + Metropolis 判定）。合金の規則化・偏析</td>
+          <td class="m">--steps --species --swap-pairs --shuffle</td></tr>
+      <tr><td class="m">mcmd</td><td>MD と MC を交互に。MD が振動と体積を、MC が元素配置を緩和する</td>
+          <td class="m">--cycles --mc-steps --md-steps --ensemble</td></tr>
+      <tr><td class="m">mcrelax</td><td>MC と構造緩和を交互に（0 K 的な安定配置探索）</td>
+          <td class="m">--cycles --mc-steps --fmax --max-itr --optimizer</td></tr>
+      <tr><td class="m">kmc</td><td>スワップ相手をカットオフ内の近接原子に限った動的 MC</td>
+          <td class="m">--steps --neighbor-cutoff</td></tr>
+      <tr><td class="m">kmc-voronoi</td><td>ボロノイ多面体を作る原子を候補にし、距離のガウス重みで抽選（Hastings 補正つき）</td>
+          <td class="m">--steps --r0 --voronoi-cutoff</td></tr>
+      <tr><td class="m">kmcmd</td><td>近接スワップ kMC + MD（拡散加速。活性化エネルギー不要）</td>
+          <td class="m">--cycles --mc-steps --md-steps --neighbor-cutoff</td></tr>
+      <tr><td class="m">kmc-voronoi-md</td><td>ボロノイ提案 kMC + MD。MD で歪んでもカットオフ調整が要らない</td>
+          <td class="m">--cycles --mc-steps --md-steps --r0</td></tr>
+      <tr><td class="m">event-kmc</td><td>空孔ホップの障壁を CI-NEB で求め BKL 法で実時間発展。
+          <b>拡散係数とイオン伝導度</b>が出る</td>
+          <td class="m">--mobile-species --vacancies --steps --nu0 --n-images</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>アンサンブル（何を固定するか）</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th class="m">--ensemble</th><th>固定する量</th><th>温度制御</th><th>セル</th><th>LAMMPS 相当</th></tr></thead>
+    <tbody>
+      <tr><td class="m">nve</td><td>N, V, E</td><td>なし</td><td>固定</td><td class="m">fix nve</td></tr>
+      <tr><td class="m">nvt<span class="d">（既定）</span></td><td>N, V, T</td><td>Nosé-Hoover チェーン</td><td>固定</td><td class="m">fix nvt</td></tr>
+      <tr><td class="m">npt</td><td>N, P, T</td><td>Nosé-Hoover</td><td>可変（--npt-mask）</td><td class="m">fix npt</td></tr>
+      <tr><td class="m">nph</td><td>N, P, H</td><td>なし</td><td>可変（--npt-mask）</td><td class="m">fix nph</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>熱浴の強さは <code>--ttime</code>（小さいほど強い）、圧浴は <code>--pfactor</code>（= ptime² × 体積弾性率）です。</p>
+
+  <h3>出力</h3>
+  <div class="tree"><b>ezcal_out/FePt_mcmd/</b>
+├── <i>energy_log.csv</i>                     <span class="cm">全ステップ（E・T・体積・MSD・受理数）</span>
+├── <i>energy_profile.png</i>                 <span class="cm">material-mc のフェーズ別エネルギー推移</span>
+├── <i>final_structure.cif</i> / <i>combined.traj</i>  <span class="cm">最終構造と結合済み軌跡</span>
+├── <i>report.md</i> / <i>summary.json</i>            <span class="cm">設定・受理率・平均量</span>
+├── structures/<i>step_*.cif</i>  <i>md_*.traj</i>    <span class="cm">スナップショット</span>
+└── plots/<i>dynamics.png</i> / <i>.html</i>          <span class="cm">E・T・E_tot・体積・MSD の時系列</span></div>
+  <p style="margin-top:.8rem"><code>--view-notebook</code> を付けると <code>view_traj.ipynb</code>（nglview で
+     3D 再生）も作られます（<code>uv pip install nglview ipywidgets</code> が必要）。
+     図だけ作り直すのは <code>ezcal plot &lt;実行ディレクトリ&gt;</code> です。</p>
+
+  <h3>よく使う指定</h3>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal md Cu.cif --supercell 3 3 3</b>                <span class="c"># 小さいセルは繰り返して使う</span>
+<span class="p">$</span> <b>ezcal mc alloy.cif --species Fe,Pt</b>                <span class="c"># この 2 元素だけ交換</span>
+<span class="p">$</span> <b>ezcal mc alloy.cif --species 'Fe,Pt;Li,O'</b>         <span class="c"># 群ごとに独立（Fe⇔Pt, Li⇔O のみ）</span>
+<span class="p">$</span> <b>ezcal mc alloy.cif --swap-pairs Fe-Pt,Li-O</b>        <span class="c"># ペアを直接指定</span>
+<span class="p">$</span> <b>ezcal mc alloy.cif --shuffle --seed 1</b>             <span class="c"># 初期配置を無作為化（再現可）</span>
+<span class="p">$</span> <b>ezcal mc alloy.cif --energy-mode peratom --n-swap 4</b> <span class="c"># 原子別エネルギーで同時スワップ</span></pre></div>
+  <div class="note">
+    <b>空孔は He で置ける</b>
+    <p>構造に He を置くと、material-mc は MC/kMC のエネルギー評価のときだけ He を取り除きます。
+       He ⇔ 原子のスワップが空孔ジャンプになるので、空孔を含む配置をサンプリングできます。</p>
+  </div>
+</section>
+
+<!-- ========================= 13 ========================= -->
+<section id="mlip" data-lv="a">
+  <div class="s-head"><span class="s-num">13</span><h2>ポテンシャルの切り替え</h2><span class="badge a">応用</span></div>
+  <p class="lead">ezcal が MLIP / NNP に求めるのは <b>ASE の calculator を 1 つ作れること</b>だけです。
+     ポテンシャルごとに設定方法がまるで違っても、指定の仕方は 3 通りに集約されています。</p>
+
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal mlip list</b>                 <span class="c"># 使えるレシピと、この環境で読めるか</span>
+<span class="p">$</span> <b>ezcal mlip check --build</b>        <span class="c"># いまの設定で本当に作れるか試す</span>
+<span class="p">$</span> <b>ezcal mlip template -o my_potential.py</b>  <span class="c"># 自前スクリプトの雛形</span></pre></div>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>指定方法</th><th>書き方</th><th>使いどころ</th></tr></thead>
+    <tbody>
+      <tr><td class="m">レシピ名<br>（同梱）</td>
+          <td class="m">--mlip-backend sevennet --model 7net-l3i5</td>
+          <td>SevenNet / MACE / CHGNet / Orb / MatGL / EMT / LJ。
+              モデルの切り替えは <code>--model</code> だけ</td></tr>
+      <tr><td class="m">import パス</td><td class="m">--calc-factory mace.calculators:mace_mp</td>
+          <td>ライブラリの関数をそのまま呼びたいとき</td></tr>
+      <tr><td class="m">自前スクリプト</td><td class="m">--calc-script my_potential.py</td>
+          <td>設定方法が特殊なポテンシャル、自前 checkpoint、アンサンブル …</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>同梱レシピと主なモデル</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th class="m">--mlip-backend</th><th>必要なパッケージ</th><th>--model の例</th></tr></thead>
+    <tbody>
+      <tr><td class="m">sevennet<span class="d">（既定）</span></td><td class="m">sevenn</td>
+          <td class="m">7net-0 / 7net-l3i5 / 7net-mf-ompa / 7net-omat / 7net-omni / checkpoint のパス</td></tr>
+      <tr><td class="m">mace</td><td class="m">mace-torch</td><td class="m">small / medium / large</td></tr>
+      <tr><td class="m">chgnet</td><td class="m">chgnet</td><td class="m">0.3.0</td></tr>
+      <tr><td class="m">orb</td><td class="m">orb-models</td><td class="m">orb-v3-conservative-inf-omat</td></tr>
+      <tr><td class="m">matgl</td><td class="m">matgl</td><td class="m">M3GNet-MP-2021.2.8-PES</td></tr>
+      <tr><td class="m">emt / lj</td><td class="m">（ASE 内蔵）</td><td class="d">—（配線確認・デモ用）</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>レシピの実体は <code>src/ezcal/calculators/recipes/*.py</code> にある 1 ファイル 1 ポテンシャルの
+     Python です。同じ形式のファイルを自分のディレクトリに置き、
+     <code>mlip.recipe_dirs</code> にそのディレクトリを足せば、<code>--mlip-backend</code> の選択肢が増えます。</p>
+
+  <h3>自前スクリプトの中身</h3>
+  <div class="cmd"><pre><span class="c"># my_potential.py — build() が calculator を返せばよい</span>
+<b>NAME</b> = "my_potential"
+<b>REQUIRES</b> = ("sevenn",)          <span class="c"># 足りなければ導入方法を案内する</span>
+<b>DEFAULTS</b> = {"device": "cpu"}    <span class="c"># build() の既定引数</span>
+
+<b>def build</b>(model=None, device="cpu", **options):
+    from sevenn.calculator import SevenNetCalculator
+    return SevenNetCalculator(model=model or "/path/to/checkpoint.pth",
+                              device=device, **options)</pre></div>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal md Cu.cif --calc-script my_potential.py --calc-option device=cuda</b>
+<span class="p">$</span> <b>ezcal relax Cu.cif --engine mlip --calc-script my_potential.py</b></pre></div>
+  <div class="note">
+    <b>設定ファイルに書いておくこともできます</b>
+    <p><code>mlip.backend</code> / <code>mlip.model</code> / <code>mlip.device</code> /
+       <code>mlip.options</code> / <code>mlip.script</code> / <code>mlip.factory</code> /
+       <code>mlip.recipe_dirs</code> の 7 キーです。
+       <code>--model</code> と <code>--device</code> は、レシピがその引数を受け取る場合だけ自動で渡されます
+       （EMT のようにモデルの概念が無いレシピには渡りません）。</p>
+  </div>
+  <div class="warnbox">
+    <b>MLIP でできること・できないこと</b>
+    <p>汎用ポテンシャルは <b>scf（全エネルギー・力・応力）・relax・vc-relax</b>、
+       および <b>MD / MC</b> に使えます。電子状態が無いので
+       <code>nscf</code> / <code>bands</code> / <code>dos</code> / <code>charge</code> は実行できず、
+       黙って無意味な値を返す代わりに明示的なエラーになります。</p>
+  </div>
+</section>
+
+<!-- ========================= 14 ========================= -->
 <section id="bench" data-lv="b">
-  <div class="s-head"><span class="s-num">12</span><h2>ベンチマークで確認</h2><span class="badge b">基本</span></div>
+  <div class="s-head"><span class="s-num">14</span><h2>ベンチマークで確認</h2><span class="badge b">基本</span></div>
   <p class="lead">新しい環境で ezcal が正しく動いているかを 1 コマンドで確かめます。</p>
 
   <p>原子数の少ない金属 20 種・酸化物 20 種を <code>auto</code> で流し、
@@ -1325,7 +1631,7 @@ rows = []
 
 <!-- ========================= 12 ========================= -->
 <section id="gloss" data-lv="b">
-  <div class="s-head"><span class="s-num">13</span><h2>用語ミニ辞典</h2><span class="badge b">基本</span></div>
+  <div class="s-head"><span class="s-num">15</span><h2>用語ミニ辞典</h2><span class="badge b">基本</span></div>
   <p class="lead">オプション名に出てくる言葉だけ、最短で。</p>
   <dl class="gloss">
     <dt>SCF</dt><dd>自己無撞着計算。電子密度が自分自身と矛盾しなくなるまで繰り返す、全ての出発点。</dd>
@@ -1358,7 +1664,7 @@ rows = []
 </section>
 
 <footer>
-  <p>ezcal 0.1.0 — /home/tajimamainpc/06_claude_code/08_qez</p>
+  <p>ezcal 0.2.0</p>
   <p>README.md · docs/EXTENDING.md · docs/REPORT.md · notebooks/ezcal_demo.ipynb · 02_ezcal_test/run_tests.sh</p>
 </footer>
 </main>

@@ -1,4 +1,4 @@
-"""The Quantum ESPRESSO engine."""
+"""Quantum ESPRESSO エンジン。"""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ _EXE = {"pw": "pw.x", "dos": "dos.x", "projwfc": "projwfc.x",
 
 
 class QEEngine(Engine):
-    """Drive ``pw.x`` and the post-processing tools."""
+    """``pw.x`` と後処理ツール群を駆動する。"""
 
     name = "qe"
     supported = ("scf", "relax", "vc-relax", "nscf", "bands", "dos", "pdos", "charge")
@@ -35,7 +35,7 @@ class QEEngine(Engine):
         if message not in self.warnings:
             self.warnings.append(message)
 
-    # ------------------------------------------------------------ set-up
+    # ------------------------------------------------------------ 準備処理
     def executable(self, key: str) -> str:
         explicit = self.config.get(f"qe.commands.{key}")
         if explicit:
@@ -52,15 +52,15 @@ class QEEngine(Engine):
         pw = self.executable("pw")
         if shutil.which(pw) is None and not Path(pw).is_file():
             problems.append(
-                f"pw.x not found at {pw!r} - set qe.bin_dir or qe.commands.pw in qe_config.yaml"
+                f"pw.x が {pw!r} に見つかりません。qe_config.yaml の qe.bin_dir か qe.commands.pw を設定してください"
             )
         return problems
 
     def pseudo_manager(self) -> PseudoManager:
         cfg = self.config
-        # only directories the user asked for: Quantum ESPRESSO's own pseudo/
-        # folder is test data, not a curated library, and picking files out of
-        # it silently overrides the PSLibrary choice
+        # 探索するのはユーザーが明示したディレクトリのみ。Quantum ESPRESSO 付属の
+        # pseudo/ フォルダは整備されたライブラリではなくテストデータであり、そこから
+        # ファイルを拾うと PSLibrary の選択を黙って上書きしてしまう
         extra = [Path(str(d)).expanduser()
                  for d in (cfg.get("qe.pseudo_extra_dirs") or [])]
         return PseudoManager(
@@ -75,7 +75,7 @@ class QEEngine(Engine):
         )
 
     def prepare(self, structure) -> dict:
-        """Resolve pseudopotentials and fill in any cutoff left on ``auto``."""
+        """擬ポテンシャルを決定し、``auto`` のままのカットオフを埋める。"""
         if self._pseudos is None:
             manager = self.pseudo_manager()
             elements = [str(el) for el in structure.composition.elements]
@@ -92,14 +92,13 @@ class QEEngine(Engine):
                 chosen = float(chosen)
                 if chosen < wfc:
                     self._warn(
-                        f"ecutwfc {chosen:g} Ry is below the {wfc:g} Ry the pseudopotentials "
-                        "ask for; PAW/USPP runs can fail with 'charge is wrong' or break down "
-                        "in cdiaghg")
+                        f"ecutwfc {chosen:g} Ry は擬ポテンシャルが要求する {wfc:g} Ry を"
+                        "下回っています。PAW/USPP の計算は 'charge is wrong' で失敗したり、"
+                        "cdiaghg で破綻したりすることがあります")
 
             if self.config.get("dft.ecutrho") is None:
-                # keep the dual consistent with the cutoff actually in use: pairing a
-                # lowered ecutwfc with the pseudopotential's own ecutrho gives an odd
-                # ratio that makes the augmentation charge blow up
+                # dual は実際に使うカットオフと整合させる。下げた ecutwfc に擬ポテンシャル
+                # 本来の ecutrho を組み合わせると比が不自然になり、補強電荷が発散する
                 suggested = rho if chosen >= wfc else chosen * dual
                 self.config.set("dft.ecutrho", round(max(suggested, chosen * dual), 1))
         return self._pseudos
@@ -108,7 +107,7 @@ class QEEngine(Engine):
         manager_dir = self.config.path("qe.pseudo_dir") or Path("~/.ezcal/pseudo").expanduser()
         return manager_dir
 
-    # -------------------------------------------------------- band counts
+    # ------------------------------------------------------------ バンド数
     def nelec(self, structure) -> float:
         pseudos = self.prepare(structure)
         return float(sum(pseudos[site.specie.symbol].z_valence for site in structure))
@@ -118,12 +117,12 @@ class QEEngine(Engine):
         occupied = max(1, math.ceil(nelec / 2.0))
         return int(occupied + max(minimum_extra, math.ceil(occupied * extra_ratio)))
 
-    # ------------------------------------------------------------- runner
+    # ------------------------------------------------------------- 実行部
     def run(self, structure, task: str, workdir: Path, prev: CalcResult | None = None,
             **kwargs) -> CalcResult:
         task = task.lower()
         if not self.supports(task):
-            raise EngineError(f"QE engine cannot run task {task!r}")
+            raise EngineError(f"QE エンジンはタスク {task!r} を実行できません")
         workdir = Path(workdir)
         workdir.mkdir(parents=True, exist_ok=True)
         outdir = Path(kwargs.pop("outdir", None) or workdir / "tmp").resolve()
@@ -214,12 +213,12 @@ class QEEngine(Engine):
         if job.submitted_only:
             result.ok = True
             result.messages.append(
-                f"submitted to the queue as {job.job_id}" if job.job_id
-                else "dry run: the input was written, pw.x was not started")
+                f"ジョブ {job.job_id} としてキューに投入しました" if job.job_id
+                else "ドライラン: 入力を書き出しました (pw.x は起動していません)")
             return result
         if not job.ok:
             result.messages += job.log[-2:]
-            result.messages.append(f"pw.x failed (exit code {job.returncode}); see {outfile}")
+            result.messages.append(f"pw.x が失敗しました (終了コード {job.returncode})。{outfile} を確認してください")
             self._attach_text(result, outfile)
             return result
 
@@ -239,7 +238,7 @@ class QEEngine(Engine):
         result.ok = bool(result.converged or task in {"nscf", "bands"})
         if not result.ok and result.energy is not None:
             result.ok = True
-            result.messages.append("finished but the SCF convergence flag was not set")
+            result.messages.append("計算は終了しましたが、SCF 収束フラグが立っていません")
         return result
 
     # -- dos.x / projwfc.x -------------------------------------------------
@@ -287,13 +286,13 @@ class QEEngine(Engine):
                 result.data["pdos"] = pdos
         result.ok = "dos" in result.data
         if not result.ok:
-            result.messages.append(f"dos.x produced no output; see {workdir/'dos.out'}")
+            result.messages.append(f"dos.x が出力を生成しませんでした。{workdir/'dos.out'} を確認してください")
         return result
 
-    # -- charge density and atomic charges ---------------------------------
+    # -- 電荷密度と原子電荷 ------------------------------------------------
     def _run_charge(self, structure, workdir: Path, outdir: Path,
                     prev: CalcResult | None, **kwargs) -> CalcResult:
-        """pp.x cubes, then Bader basins and the Loewdin charges projwfc already gave."""
+        """pp.x で cube を出力し、Bader ベイスンと projwfc 由来の Loewdin 電荷をまとめる。"""
         from ezcal import charge as chargemod
 
         cfg = self.config
@@ -360,14 +359,14 @@ class QEEngine(Engine):
             try:
                 loaded[kind] = chargemod.read_cube(path)
             except Exception as exc:
-                result.messages.append(f"could not read {path.name}: {exc}")
+                result.messages.append(f"{path.name} を読めませんでした: {exc}")
         result.data["cubes"] = {k: {"grid": c.shape, "electrons": c.electrons}
                                 for k, c in loaded.items()}
         density = loaded.get("density")
         if density is not None:
             result.data["nelec_from_grid"] = density.electrons
 
-        # Loewdin charges are already in the projwfc output of the DOS step
+        # Loewdin 電荷は DOS ステップの projwfc 出力に既に含まれている
         lowdin = {}
         for candidate in self._projwfc_candidates(workdir, prev):
             lowdin = chargemod.parse_lowdin(candidate)
@@ -378,7 +377,7 @@ class QEEngine(Engine):
             result.data["lowdin"] = lowdin
         else:
             result.messages.append(
-                "no projwfc.x output found, so no Loewdin charges - run the dos step first")
+                "projwfc.x の出力が見つからないため Loewdin 電荷は得られません。先に dos ステップを実行してください")
 
         bader = None
         source = str(cfg.get("charge.bader_source", "density"))
@@ -390,7 +389,7 @@ class QEEngine(Engine):
                     loaded[source], reference=reference,
                     expected_electrons=nelec if source in {"density", "ae_valence"} else None)
             except Exception as exc:
-                result.messages.append(f"Bader analysis failed: {exc}")
+                result.messages.append(f"Bader 解析に失敗しました: {exc}")
             else:
                 result.data["bader"] = {
                     "source": source, "grid": bader.grid,
@@ -411,7 +410,7 @@ class QEEngine(Engine):
 
     @staticmethod
     def _projwfc_candidates(workdir: Path, prev: CalcResult | None):
-        """Where a projwfc.x output could be: this step, the previous one, siblings."""
+        """projwfc.x の出力があり得る場所: 今回のステップ、直前のステップ、同階層。"""
         seen: list[Path] = []
         roots = [workdir]
         if prev is not None:
@@ -424,7 +423,7 @@ class QEEngine(Engine):
                 seen.append(candidate)
         return seen
 
-    # -- helpers -----------------------------------------------------------
+    # -- 補助関数 ----------------------------------------------------------
     def _attach_text(self, result: CalcResult, outfile: Path) -> None:
         text = qeout.parse_pw_text(outfile)
         result.converged = text.converged
@@ -452,8 +451,8 @@ class QEEngine(Engine):
         result.nelec = parsed.nelec
         result.nbnd = parsed.nbnd
         if result.task not in {"nscf", "bands"}:
-            # nscf/bands reuse the scf density without recomputing the
-            # magnetisation, and QE writes plain zeros for it there
+            # nscf/bands は scf の電荷密度をそのまま使い、磁化を計算し直さない。
+            # QE はその場合、磁化としてただ 0 を書き出す
             result.magnetization = parsed.magnetization
             if parsed.absolute_magnetization is not None:
                 result.abs_magnetization = parsed.absolute_magnetization
@@ -485,12 +484,11 @@ class QEEngine(Engine):
 
 
 def band_gap_from_eigenvalues(parsed: qeout.PwXml) -> dict | None:
-    """Band gap from the eigenvalue spectrum and the electron count.
+    """固有値スペクトルと電子数からバンドギャップを求める。
 
-    Counting electrons rather than comparing against E_F matters: with a
-    smearing scheme Quantum ESPRESSO puts E_F *below* the valence band
-    maximum of an insulator, which would make every semiconductor look
-    metallic.
+    E_F との比較ではなく電子数を数えることが重要である。スメアリングを使うと
+    Quantum ESPRESSO は絶縁体の E_F を価電子帯上端より *下* に置くため、そのまま
+    比較するとあらゆる半導体が金属に見えてしまう。
     """
     eig = parsed.eigenvalues
     if eig is None or eig.size == 0 or parsed.nelec is None:
@@ -500,7 +498,7 @@ def band_gap_from_eigenvalues(parsed: qeout.PwXml) -> dict | None:
 
     if nspin == 1:
         nocc = nelec / 2.0
-        if abs(nocc - round(nocc)) > 1e-6:            # odd electron count -> metal
+        if abs(nocc - round(nocc)) > 1e-6:            # 電子数が奇数 -> 金属
             return {"gap": 0.0, "metal": True, "vbm": None, "cbm": None, "direct": None}
         nocc = int(round(nocc))
         if nocc < 1 or nocc >= nbnd:
@@ -519,7 +517,7 @@ def band_gap_from_eigenvalues(parsed: qeout.PwXml) -> dict | None:
 
     vbm, cbm = float(homo_k.max()), float(lumo_k.min())
     k_vbm, k_cbm = int(np.argmax(homo_k)), int(np.argmin(lumo_k))
-    if cbm <= vbm:                                     # overlapping bands -> metal
+    if cbm <= vbm:                                     # バンドが重なっている -> 金属
         return {"gap": 0.0, "metal": True, "vbm": vbm, "cbm": cbm, "direct": None}
     return {
         "gap": cbm - vbm,

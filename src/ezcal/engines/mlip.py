@@ -1,12 +1,13 @@
-"""Machine-learning interatomic potential engine (SevenNet by default).
+"""機械学習原子間ポテンシャル (MLIP / NNP) エンジン (既定は SevenNet)。
 
-Only the tasks that a universal potential can actually answer are
-supported: total energy, forces, stress and geometry optimisation.
-Electronic-structure tasks (nscf / bands / dos) raise a clear error
-instead of producing something meaningless.
+汎用ポテンシャルが実際に答えられるタスクだけを対象とする。すなわち全エネルギー、
+力、応力、構造最適化である。電子構造に関わるタスク (nscf / bands / dos) は、
+無意味な結果を返す代わりに明示的なエラーを送出する。
 
-Adding another MLIP means adding a branch to :meth:`MLIPEngine.calculator`;
-nothing else in ezcal needs to change.
+calculator そのものの作り方はこのモジュールには書かれておらず、
+:mod:`ezcal.calculators` が解決する。ASE の calculator を返せるなら、
+同梱レシピ (``--mlip-backend sevennet`` 等)、import パス (``mlip.factory``)、
+ユーザーの Python スクリプト (``mlip.script``) のどれでも同じように動く。
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ EV_PER_ANG3_TO_GPA = 160.21766208
 
 
 class MLIPEngine(Engine):
-    """Single point energies and relaxations from a pre-trained potential."""
+    """学習済みポテンシャルによる一点計算と構造最適化。"""
 
     name = "mlip"
     supported = ("scf", "relax", "vc-relax")
@@ -31,47 +32,37 @@ class MLIPEngine(Engine):
         super().__init__(config, scheduler)
         self._calc = None
 
-    # ------------------------------------------------------------ set-up
+    # ------------------------------------------------------------ 準備処理
     def check(self) -> list[str]:
-        backend = str(self.config.get("mlip.backend", "sevennet")).lower()
-        if backend in {"sevennet", "7net"}:
-            try:
-                import sevenn  # noqa: F401
-            except ImportError:
-                return ["SevenNet is not installed:  uv pip install sevenn"]
-            return []
-        return [f"unknown mlip backend {backend!r}"]
+        from ezcal import calculators
+
+        return calculators.check(self.config)
+
+    def describe(self) -> str:
+        from ezcal import calculators
+
+        return calculators.describe(self.config)
 
     def calculator(self):
-        if self._calc is not None:
-            return self._calc
-        backend = str(self.config.get("mlip.backend", "sevennet")).lower()
-        model = self.config.get("mlip.model", "7net-0")
-        device = self.config.get("mlip.device", "cpu")
-        if backend in {"sevennet", "7net"}:
-            from sevenn.calculator import SevenNetCalculator
+        """設定が指すポテンシャルの ASE calculator (1 度作ったら使い回す)。"""
+        if self._calc is None:
+            from ezcal import calculators
+            from ezcal.calculators import CalculatorError
 
-            self._calc = SevenNetCalculator(model=model, device=device)
-        elif backend == "mace":                       # pragma: no cover - optional
-            from mace.calculators import mace_mp
-
-            self._calc = mace_mp(model=model, device=device)
-        elif backend == "chgnet":                     # pragma: no cover - optional
-            from chgnet.model.dynamics import CHGNetCalculator
-
-            self._calc = CHGNetCalculator()
-        else:
-            raise EngineError(f"unknown mlip backend {backend!r}")
+            try:
+                self._calc = calculators.get_calculator(self.config)
+            except CalculatorError as exc:
+                raise EngineError(str(exc)) from exc
         return self._calc
 
-    # ------------------------------------------------------------- runner
+    # ------------------------------------------------------------- 実行部
     def run(self, structure, task: str, workdir: Path, prev: CalcResult | None = None,
             **kwargs) -> CalcResult:
         task = task.lower()
         if not self.supports(task):
             raise EngineError(
-                f"the MLIP engine cannot do {task!r}: a machine-learning potential has no "
-                "electronic structure.  Use --engine qe for scf/nscf/bands/dos."
+                f"MLIP エンジンは {task!r} を実行できません。機械学習ポテンシャルは電子構造を"
+                "持たないためです。scf/nscf/bands/dos には --engine qe を使ってください。"
             )
         workdir = Path(workdir)
         workdir.mkdir(parents=True, exist_ok=True)
@@ -120,12 +111,10 @@ class MLIPEngine(Engine):
         result.walltime = time.time() - start
         result.ok = True
         result.messages.append(
-            f"{self.config.get('mlip.backend', 'sevennet')} model "
-            f"{self.config.get('mlip.model', '7net-0')} on {self.config.get('mlip.device', 'cpu')}"
-        )
+            f"MLIP: {self.describe()} on {self.config.get('mlip.device', 'cpu')}")
         return result
 
-    # -- helpers -----------------------------------------------------------
+    # -- 補助関数 ----------------------------------------------------------
     def _optimizer(self, target, logfile: str, trajectory: str):
         name = str(self.config.get("mlip.optimizer", "FIRE")).upper()
         if name == "BFGS":
@@ -145,6 +134,6 @@ class MLIPEngine(Engine):
         else:
             try:
                 from ase.filters import FrechetCellFilter as Filter
-            except ImportError:                       # ASE < 3.23
+            except ImportError:                       # ASE 3.23 未満
                 from ase.constraints import ExpCellFilter as Filter
         return Filter(atoms)

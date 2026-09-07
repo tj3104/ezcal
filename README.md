@@ -2,7 +2,8 @@
 
 初期構造ファイルを 1 つ渡すだけで第一原理計算が終わるようにする CLI パッケージです。
 既定エンジンは Quantum ESPRESSO、計算エンジン層は差し替え可能で、SevenNet (MLIP) が
-そのまま使え、VASP への拡張点も用意してあります。
+そのまま使え、VASP への拡張点も用意してあります。機械学習ポテンシャルによる
+分子動力学とモンテカルロ (material-mc) も同じ CLI から実行できます。
 
 **マニュアル: [`docs/manual.html`](docs/manual.html)**（ブラウザで開いてください。初心者向け／上級者向けの切り替えつき）
 
@@ -14,6 +15,10 @@ ezcal dos   Si.cif          # scf -> nscf -> dos.x/projwfc.x
 ezcal auto  Si.cif          # vc-relax -> scf -> nscf -> dos -> bands まで一括
 
 ezcal scf Si.cif --ecutwfc 60 --kmesh 8 8 8
+
+ezcal charge MgO.cif        # 電荷密度・原子電荷・3D 可視化
+ezcal md   FePt.cif -T 900  # MLIP で分子動力学 (NVE/NVT/NPT/NPH)
+ezcal mc   FePt.cif --mode mcmc --steps 1000
 ```
 
 ---
@@ -25,6 +30,7 @@ source /home/tajimamainpc/.venv/ezcalenv312/bin/activate
 uv pip install -e /home/tajimamainpc/06_claude_code/08_qez          # 本体
 uv pip install -e '/home/tajimamainpc/06_claude_code/08_qez[all]'   # + mp-api, jupyter
 uv pip install sevenn                                               # MLIP を使う場合
+uv pip install -e ~/repos/material_monte_carlo/mc                   # MD / MC を使う場合
 ```
 
 Quantum ESPRESSO の実行ファイルは `qe_config.yaml` の `qe.bin_dir`
@@ -61,8 +67,12 @@ Quantum ESPRESSO の実行ファイルは `qe_config.yaml` の `qe.bin_dir`
 | `ezcal mp mp-149` | Materials Project から構造取得 | - |
 | `ezcal pseudo list/fetch` | 擬ポテンシャルの一覧・取得 | - |
 | `ezcal config init/show` | `qe_config.yaml` の生成・確認 | - |
-| `ezcal plot RUNDIR` | 計算済みディレクトリから図を描き直す | - |
+| `ezcal plot RUNDIR` | 計算済みディレクトリから図を描き直す (バンド/DOS/電荷/MD) | - |
 | `ezcal engines` | 利用可能なエンジンの確認 | - |
+| `ezcal charge` | 電荷密度・原子電荷・3D 可視化 (11 節) | scf, dos |
+| `ezcal md` | 分子動力学 (NVE/NVT/NPT/NPH。13 節) | - |
+| `ezcal mc` | モンテカルロ (MCMC/MCMD/kMC/event-kMC。13 節) | - |
+| `ezcal mlip list/check/modes/template` | ポテンシャルとモードの確認・雛形出力 (14 節) | - |
 
 前段を流したくないときは `--only`、一部だけ飛ばすときは `--skip nscf,dos` を使います。
 
@@ -180,16 +190,17 @@ ezcal_out/Si_auto/
 
 絶縁体ではプロットのゼロ点を VBM に、金属では E_F に取ります。
 
-## 9. 機械学習ポテンシャル (SevenNet)
+## 9. 機械学習ポテンシャル (既定は SevenNet)
 
 ```bash
 ezcal vc-relax Si.cif --engine mlip
 ezcal auto     Si.cif --engine mlip     # 電子状態の段は自動でスキップし理由を表示
-ezcal scf      Si.cif --engine mlip --set mlip.model=7net-l3i5
+ezcal scf      Si.cif --engine mlip --model 7net-l3i5
 ```
 
 エネルギー・力・応力・構造最適化のみ対応します。バンドや DOS を要求された場合は
 黙って別物を出さず、対応していない旨を返します。DFT の前段としての粗い緩和に有効です。
+ポテンシャルの選び方・切り替え方は 14 節を参照してください。
 
 ## 10. VASP
 
@@ -262,9 +273,19 @@ ezcal charge X.cif --charge-kinds density,spin,ae_valence
 | `properties.md` / `properties.json` | ギャップ・E_F・原子ごとの磁気モーメントと電荷を1か所に集約 |
 | `plots/density_profile.png` | 各軸方向の平面平均（原子位置つき） |
 | `plots/density_slice.png` | 3面の2D断面 |
-| `plots/density_isosurface.html` | 3D等値面（plotly、原子位置つき） |
+| `plots/density_isosurface.png` / `.html` | **電荷密度分布の3D**。等電荷面を実空間にマッピングし、原子（CPK 色）とセル稜線を重ねる。png は marching cubes、html は回転できる plotly |
+| `plots/charge_map.png` / `.html` | **価数の3Dマッピング**。原子を実座標に置き、電荷で色（赤=陽イオン / 青=陰イオン）、\|電荷\| で大きさを変え、値を文字で表示 |
 
-スピン分極計算では `spin_*` も同じ3種類が出ます。
+スピン分極計算では `spin_*` も同じ種類が出ます（スピン密度の等値面は 0 を中心に赤/青）。
+
+```bash
+ezcal charge MgO.cif --plot both --iso-level 0.05 --iso-level 0.5   # 等値面の値を指定
+ezcal plot ezcal_out/Fe_charge_spin --charge-map-source moment_sphere  # 磁気モーメントで塗る
+ezcal charge X.cif --no-isosurface --no-charge-map                  # 3D を作らない
+```
+
+`ezcal plot <実行ディレクトリ>` は残っている `*.cube` と `atomic_charges.csv` から
+図だけを作り直します（**再計算しません**）。
 
 ### 原子電荷の2つの見方
 
@@ -325,9 +346,112 @@ ezcal bench report 03_qe_bench --mp-api-key <KEY>     # 予実比較
   (実験用と Materials Project 用の 2 枚。MP の図は API キーを渡したときだけ作られます)。
 - 途中で止めても `--resume` (既定) で続きから流せます。
 
-## 13. テスト
+## 13. 分子動力学とモンテカルロ (`ezcal md` / `ezcal mc`)
+
+機械学習ポテンシャルで MD と配置サンプリングを回します。計算の中身は
+**material-mc**（ASE ベースの MC/MD パッケージ、`~/repos/material_monte_carlo`）が担当し、
+ezcal は構造の読み込み・calculator の用意・記録と作図を受け持ちます。
 
 ```bash
-cd 02_ezcal_test
-./run_tests.sh          # 8 コア、緩い収束条件での一通りの動作確認
+ezcal md FePt.cif -T 900 --ensemble nvt --steps 2000
+ezcal md FePt.cif -T 900 --ensemble npt --npt-mask 0 0 1      # z 軸だけ可変
+ezcal mc FePt.cif --mode mcmc --steps 1000 -T 1000
+ezcal mc FePt.cif --mode mcmd --cycles 10 --mc-steps 20 --md-steps 200
+ezcal mc LiCoO2.cif --mode event-kmc --mobile-species Li --vacancies 1
+ezcal mlip modes                                              # モード一覧
+```
+
+| `--mode` | 内容 | 主な引数 |
+|---|---|---|
+| `md`（既定） | MC を挟まない純粋な MD | `--steps --ensemble --timestep --ttime --pressure --npt-mask` |
+| `mcmc` | 格子モンテカルロ（元素スワップ + Metropolis） | `--steps --species --swap-pairs --shuffle` |
+| `mcmd` | MD と MC を交互に | `--cycles --mc-steps --md-steps --ensemble` |
+| `mcrelax` | MC と構造緩和を交互に（0 K 的な安定配置探索） | `--cycles --mc-steps --fmax --max-itr` |
+| `kmc` | 近接スワップに限った動的 MC | `--steps --neighbor-cutoff` |
+| `kmc-voronoi` | ボロノイ候補への距離重み付き提案 + Hastings 補正 | `--steps --r0 --voronoi-cutoff` |
+| `kmcmd` | 近接スワップ kMC + MD（拡散加速） | `--cycles --mc-steps --md-steps` |
+| `kmc-voronoi-md` | ボロノイ提案 kMC + MD | `--cycles --mc-steps --md-steps --r0` |
+| `event-kmc` | 空孔ホップの障壁を CI-NEB で求め BKL 法で実時間発展 | `--mobile-species --vacancies --nu0 --n-images` |
+
+`--ensemble` は **N P V T E のどれを固定するか**の選択です
+（`nve` = N,V,E ／ `nvt` = N,V,T ／ `npt` = N,P,T ／ `nph` = N,P,H。
+LAMMPS の `fix nve/nvt/npt/nph` に相当）。
+
+### 出力
+
+| ファイル | 内容 |
+|---|---|
+| `energy_log.csv` | 全ステップの記録（エネルギー・温度・体積・MSD・受理数） |
+| `energy_profile.png` | material-mc が出すフェーズ別エネルギー推移 |
+| `plots/dynamics.png` / `.html` | エネルギー・温度・全エネルギー・体積・MSD の時系列 |
+| `structures/` | CIF スナップショットと MD の traj |
+| `combined.traj` | 時系列に結合した軌跡（`--view-notebook` で nglview 用 ipynb も生成） |
+| `report.md` / `summary.json` | 設定・受理率・平均量（event-kMC は拡散係数とイオン伝導度も） |
+
+```bash
+ezcal md Cu.cif --supercell 3 3 3                # 小さいセルは繰り返して使う
+ezcal mc alloy.cif --species Fe,Pt               # この 2 元素だけ交換
+ezcal mc alloy.cif --species 'Fe,Pt;Li,O'        # 群ごとに独立（Fe⇔Pt, Li⇔O のみ）
+ezcal mc alloy.cif --shuffle --seed 1            # 初期配置を無作為化（再現可）
+ezcal mc alloy.cif --energy-mode peratom --n-swap 4
+```
+
+構造に He を置くと、material-mc は MC/kMC のエネルギー評価のときだけ He を取り除きます。
+He ⇔ 原子のスワップが空孔ジャンプになるので、空孔を含む配置をサンプリングできます。
+
+## 14. ポテンシャルの切り替え (`ezcal mlip`)
+
+ezcal が MLIP / NNP に求めるのは **ASE の calculator を 1 つ作れること**だけです。
+指定方法は 3 通りで、上のものが優先されます。`--engine mlip` の DFT 系タスクでも、
+`ezcal md` / `ezcal mc` でも同じ指定が使えます。
+
+| 方法 | 設定キー | CLI |
+|---|---|---|
+| 自前の Python スクリプト | `mlip.script` | `--calc-script my_potential.py` |
+| import パス | `mlip.factory` | `--calc-factory mace.calculators:mace_mp` |
+| レシピ名（同梱・追加） | `mlip.backend` | `--mlip-backend sevennet --model 7net-l3i5` |
+
+```bash
+ezcal mlip list                     # 使えるレシピと、この環境で読み込めるか
+ezcal mlip check --build            # いまの設定で本当に作れるか試す
+ezcal mlip template -o my_potential.py
+```
+
+| `--mlip-backend` | 必要なパッケージ | `--model` の例 |
+|---|---|---|
+| `sevennet`（既定） | `sevenn` | `7net-0` / `7net-l3i5` / `7net-mf-ompa` / `7net-omat` / checkpoint のパス |
+| `mace` | `mace-torch` | `small` / `medium` / `large` |
+| `chgnet` | `chgnet` | `0.3.0` |
+| `orb` | `orb-models` | `orb-v3-conservative-inf-omat` |
+| `matgl` | `matgl` | `M3GNet-MP-2021.2.8-PES` |
+| `emt` / `lj` | （ASE 内蔵） | — （配線確認・デモ用） |
+
+レシピの実体は `src/ezcal/calculators/recipes/*.py` にある 1 ファイル 1 ポテンシャルの
+Python です。同じ形式のファイルを自分のディレクトリに置いて `mlip.recipe_dirs` に足せば、
+**ezcal のコードを変えずに** `--mlip-backend` の選択肢が増えます。
+
+```python
+# my_potential.py — build() が calculator を返せばよい
+NAME = "my_potential"
+REQUIRES = ("sevenn",)            # 足りなければ導入方法を案内する
+DEFAULTS = {"device": "cpu"}
+
+def build(model=None, device="cpu", **options):
+    from sevenn.calculator import SevenNetCalculator
+    return SevenNetCalculator(model=model or "/path/to/checkpoint.pth",
+                              device=device, **options)
+```
+
+`--model` と `--device` は、そのレシピが引数として受け取る場合にだけ自動で渡されます
+（EMT のようにモデルの概念が無いレシピには渡りません）。その他の引数は
+`--calc-option key=value`（設定では `mlip.options`）で渡します。
+
+## 15. テスト
+
+```bash
+python -m pytest tests -q       # 108 件、QE 不要
+
+cd 02_ezcal_test    && ./run_tests.sh    # 36 件: DFT の一通り (8 コア、緩い収束条件)
+cd 04_charge_mapping && ./run_tests.sh   # 11 件: 電荷密度・原子電荷・3D マッピング
+cd 05_md_mc_test     && ./run_tests.sh   # 28 件: MD / MC 全モードとポテンシャル切り替え
 ```

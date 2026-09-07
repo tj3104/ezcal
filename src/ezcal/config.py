@@ -1,16 +1,16 @@
-"""Configuration handling for ezcal.
+"""ezcal の設定処理。
 
-Precedence (low -> high):
+優先順位 (低い -> 高い):
 
-1. packaged defaults (``ezcal/data/default_config.yaml``)
+1. パッケージ同梱の既定値 (``ezcal/data/default_config.yaml``)
 2. ``~/.config/ezcal/qe_config.yaml``
-3. ``./qe_config.yaml`` in the current working directory
-4. a file given with ``--config``
-5. explicit CLI options
+3. カレントディレクトリの ``./qe_config.yaml``
+4. ``--config`` で指定したファイル
+5. CLI で明示したオプション
 
-Everything is kept as plain nested dicts so that a user can add engine
-specific keys (``vasp:``, ``mlip:`` ...) without ezcal having to know
-about them in advance.
+設定はすべて素の入れ子辞書として保持する。こうしておけば、ezcal 側が事前に
+知らないエンジン固有のキー (``vasp:``、``mlip:`` など) をユーザーが自由に
+追加できる。
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ PACKAGE_DEFAULT = Path(__file__).with_name("data") / "default_config.yaml"
 
 
 def _deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> dict:
-    """Recursively merge ``override`` into ``base`` (``base`` is not mutated)."""
+    """``override`` を ``base`` に再帰的にマージする (``base`` は変更しない)。"""
     out = copy.deepcopy(dict(base))
     for key, value in override.items():
         if isinstance(value, Mapping) and isinstance(out.get(key), Mapping):
@@ -47,15 +47,15 @@ def _read_yaml(path: Path) -> dict:
     if data is None:
         return {}
     if not isinstance(data, dict):
-        raise ValueError(f"{path}: top level of a config file must be a mapping")
+        raise ValueError(f"{path}: 設定ファイルの最上位はマッピングでなければなりません")
     return data
 
 
 @dataclass
 class Config:
-    """A merged ezcal configuration.
+    """マージ済みの ezcal 設定。
 
-    Access nested values with dotted paths::
+    入れ子の値にはドット区切りのパスでアクセスする::
 
         cfg.get("dft.ecutwfc")
         cfg.set("run.nproc", 8)
@@ -64,7 +64,7 @@ class Config:
     data: dict = field(default_factory=dict)
     sources: list[str] = field(default_factory=list)
 
-    # -- access ---------------------------------------------------------
+    # -- アクセス --------------------------------------------------------
     def get(self, dotted: str, default: Any = None) -> Any:
         node: Any = self.data
         for part in dotted.split("."):
@@ -88,7 +88,7 @@ class Config:
         return Config(_deep_merge(self.data, override), list(self.sources))
 
     def apply_overrides(self, overrides: Mapping[str, Any]) -> None:
-        """Apply ``{"dft.ecutwfc": 60, ...}`` style overrides, skipping ``None``."""
+        """``{"dft.ecutwfc": 60, ...}`` 形式の上書きを適用する (``None`` は無視)。"""
         for dotted, value in overrides.items():
             if value is None:
                 continue
@@ -103,7 +103,7 @@ class Config:
         path.write_text(self.to_yaml(), encoding="utf-8")
         return path
 
-    # -- convenience for path-like values --------------------------------
+    # -- パス的な値を扱うための補助 ---------------------------------------
     def path(self, dotted: str, default: Any = None) -> Path | None:
         value = self.get(dotted, default)
         if value is None:
@@ -127,7 +127,7 @@ def load_config(
     extra: Mapping[str, Any] | None = None,
     search: bool = True,
 ) -> Config:
-    """Build the effective configuration."""
+    """実際に適用される設定を組み立てる。"""
     cfg = default_config()
     if search:
         for candidate in config_search_path(explicit):
@@ -143,11 +143,11 @@ def load_config(
 
 
 def parse_set_options(pairs: Sequence[str] | None) -> dict:
-    """Turn ``["dft.ecutwfc=60", "run.nproc=4"]`` into dotted overrides."""
+    """``["dft.ecutwfc=60", "run.nproc=4"]`` をドット区切りの上書き辞書に変換する。"""
     out: dict[str, Any] = {}
     for item in pairs or []:
         if "=" not in item:
-            raise ValueError(f"--set expects key=value, got {item!r}")
+            raise ValueError(f"--set は key=value 形式で指定してください: {item!r}")
         key, _, raw = item.partition("=")
         out[key.strip()] = yaml.safe_load(raw)
     return out

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ezcal"
-version = "0.1.0"
+version = "0.2.0"
 description = "Easy Calculation - one-command first-principles workflows (Quantum ESPRESSO / extensible to VASP, MLIP)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -33,10 +33,12 @@ dependencies = [
 [project.optional-dependencies]
 mp = ["mp-api>=0.41"]
 mlip = ["sevenn>=0.10.0", "torch>=2.0"]
+md = ["material-mc>=0.6.0", "tqdm>=4.60"]
 vasp = ["aiida-vasp>=5.1"]          # only needed for mock-vasp (replaying recorded runs)
 notebook = ["jupyter", "ipykernel", "ipywidgets"]
 dev = ["pytest>=7.0"]
-all = ["mp-api>=0.41", "jupyter", "ipykernel", "ipywidgets", "aiida-vasp>=5.1"]
+all = ["mp-api>=0.41", "jupyter", "ipykernel", "ipywidgets", "aiida-vasp>=5.1",
+       "material-mc>=0.6.0", "tqdm>=4.60"]
 
 [project.scripts]
 ezcal = "ezcal.cli:main"
@@ -48,4 +50,5 @@ Homepage = "https://github.com/example/ezcal"
 where = ["src"]
 
 [tool.setuptools.package-data]
-ezcal = ["data/*.json", "data/*.yaml", "templates/*.sh", "templates/*.yaml"]
+ezcal = ["data/*.json", "data/*.yaml", "templates/*.sh", "templates/*.yaml",
+         "templates/*.py", "calculators/recipes/*.py"]

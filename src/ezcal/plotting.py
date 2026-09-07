@@ -1,7 +1,7 @@
-"""Plotting of band structures, densities of states and relaxation traces.
+"""バンド構造、状態密度、構造最適化の履歴の作図。
 
-Every function takes a ``backends`` list - any of ``matplotlib``,
-``plotly``, ``both`` or ``none`` - and returns the files it wrote.
+どの関数も ``backends`` のリスト (``matplotlib``、``plotly``、``both``、
+``none`` のいずれか) を受け取り、書き出したファイルの一覧を返す。
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def resolve_backends(value: Any) -> list[str]:
 
 
 def _align(values, source_energy, target_energy) -> np.ndarray | None:
-    """Put a PDOS channel on the DOS energy grid (the two tools use different grids)."""
+    """PDOS のチャンネルを DOS のエネルギーグリッドに載せ替える (両者はグリッドが異なる)。"""
     values = np.asarray(values, dtype=float)
     target_energy = np.asarray(target_energy, dtype=float)
     if source_energy is None:
@@ -67,7 +67,7 @@ _PALETTE = ["#e07b39", "#2e8b57", "#8e44ad", "#c0392b", "#16a085", "#d4ac0d",
 
 
 def _channel_colours(channels) -> dict:
-    """One colour per orbital, shared by its up and down halves."""
+    """軌道ごとに 1 色を割り当て、up 成分と down 成分で同じ色を共有する。"""
     colours, order = {}, []
     for name, _ in channels:
         base = name.rsplit(" ", 1)[0] if name.endswith((" up", " down")) else name
@@ -78,7 +78,7 @@ def _channel_colours(channels) -> dict:
 
 
 def energy_axis_label(zero: str = "F", latex: bool = True) -> str:
-    """Axis label naming what the energy zero is (E_F for metals, VBM otherwise)."""
+    """エネルギーの基準点を示す軸ラベル (金属なら E_F、それ以外は VBM)。"""
     if latex:
         return rf"$E - E_\mathrm{{{zero}}}$  (eV)"
     return f"E - E_{zero} (eV)"
@@ -98,9 +98,9 @@ def _mpl():
     return plt
 
 
-# --------------------------------------------------------------- band data
+# ------------------------------------------------------------ バンドデータ
 def band_arrays(bands_result, fermi: float | None = None) -> dict:
-    """Normalise a bands :class:`CalcResult` into plain arrays."""
+    """バンドの :class:`CalcResult` を素の配列に整形する。"""
     data = bands_result.data
     eig = np.asarray(data["eigenvalues"])                # (nspin, nk, nbnd)
     kpath = data.get("kpath", {})
@@ -111,14 +111,14 @@ def band_arrays(bands_result, fermi: float | None = None) -> dict:
 
 
 def _tick_positions(distances: np.ndarray, labels: Sequence[tuple[int, str]]):
-    """Group labels that sit at the same path length (band path breaks)."""
+    """同じ経路長に位置するラベルをまとめる (バンド経路の切れ目の処理)。"""
     grouped: dict[int, tuple[float, str]] = {}
     for index, name in labels:
         if not (0 <= index < len(distances)) or not name:
             continue
         position = float(distances[index])
-        # group by path length, but keep the exact value: a rounded tick can
-        # fall marginally outside the axis limits and matplotlib drops it
+        # 経路長でまとめるが、値そのものは丸めずに保持する。丸めた目盛りは軸の
+        # 範囲からわずかに外れることがあり、matplotlib に捨てられてしまう
         key = int(round(position * 1e6))
         if key not in grouped:
             grouped[key] = (position, name)
@@ -130,7 +130,7 @@ def _tick_positions(distances: np.ndarray, labels: Sequence[tuple[int, str]]):
     return [pos for pos, _ in ordered], [name for _, name in ordered]
 
 
-# ------------------------------------------------------------------- bands
+# ------------------------------------------------------------------ バンド
 def plot_bands(bands_result, outdir: str | Path, backends: Iterable[str] = ("matplotlib",),
                fermi: float | None = None, emin: float | None = None,
                emax: float | None = None, dpi: int = 200,
@@ -207,7 +207,7 @@ def _plain(label: str) -> str:
     return label.replace("$_{", "").replace("}$", "").replace("$", "")
 
 
-# --------------------------------------------------------------------- dos
+# -------------------------------------------------------------- 状態密度
 def plot_dos(dos_result, outdir: str | Path, backends: Iterable[str] = ("matplotlib",),
              fermi: float | None = None, emin: float | None = None,
              emax: float | None = None, dpi: int = 200,
@@ -297,7 +297,7 @@ def plot_dos(dos_result, outdir: str | Path, backends: Iterable[str] = ("matplot
     return written
 
 
-# ------------------------------------------------------------ bands + dos
+# ---------------------------------------------------------- バンド + 状態密度
 def plot_bands_dos(bands_result, dos_result, outdir: str | Path,
                    backends: Iterable[str] = ("matplotlib",), fermi: float | None = None,
                    emin: float = -10.0, emax: float = 10.0, dpi: int = 200,
@@ -383,10 +383,10 @@ def plot_bands_dos(bands_result, dos_result, outdir: str | Path,
     return written
 
 
-# ------------------------------------------------------------ convergence
+# ---------------------------------------------------------------- 収束履歴
 def plot_convergence(results: Mapping[str, Any], outdir: str | Path,
                      backends: Iterable[str] = ("matplotlib",), dpi: int = 200) -> list[Path]:
-    """Total energy along the SCF / relaxation history of every step."""
+    """各ステップの SCF / 構造最適化の履歴に沿った全エネルギーを描く。"""
     series = {name: res.data.get("scf_energies")
               for name, res in results.items()
               if getattr(res, "data", None) and res.data.get("scf_energies")}
@@ -432,7 +432,7 @@ def plot_convergence(results: Mapping[str, Any], outdir: str | Path,
     return written
 
 
-# ------------------------------------------------------------- data export
+# ------------------------------------------------------------ データ書き出し
 def export_bands_csv(bands_result, path: str | Path, fermi: float | None = None) -> Path:
     arrays = band_arrays(bands_result, fermi)
     eig, dist, ef = arrays["eigenvalues"], arrays["distances"], arrays["fermi"]
@@ -471,12 +471,12 @@ def export_dos_csv(dos_result, path: str | Path, fermi: float | None = None) -> 
     return path
 
 
-# ------------------------------------------------------------ charge density
+# ------------------------------------------------------------------ 電荷密度
 _AXIS_NAME = ("a", "b", "c")
 
 
 def _charge_style(kind: str) -> tuple[str, str, bool]:
-    """(colour map, quantity label, is the quantity signed?)"""
+    """(カラーマップ, 物理量のラベル, 符号付きかどうか) を返す。"""
     if kind == "spin":
         return "RdBu_r", r"$\rho_\uparrow-\rho_\downarrow$  (e/bohr$^3$)", True
     if kind == "potential":
@@ -487,7 +487,7 @@ def _charge_style(kind: str) -> tuple[str, str, bool]:
 def plot_charge_profile(cube, outdir: str | Path, backends: Iterable[str] = ("matplotlib",),
                         kind: str = "density", dpi: int = 200,
                         title: str = "") -> list[Path]:
-    """Planar average of the density along each cell axis."""
+    """セルの各軸に沿った電荷密度の面平均を描く。"""
     from ezcal.charge import planar_average
 
     outdir = Path(outdir)
@@ -543,11 +543,10 @@ def plot_charge_profile(cube, outdir: str | Path, backends: Iterable[str] = ("ma
 def plot_charge_slice(cube, outdir: str | Path, backends: Iterable[str] = ("matplotlib",),
                       kind: str = "density", axis: int | None = None, fraction: float = 0.5,
                       dpi: int = 200, title: str = "") -> list[Path]:
-    """2D cuts through the density.
+    """電荷密度の 2 次元断面。
 
-    With ``axis=None`` (the default) one panel per cell axis is drawn, which
-    is the more useful thing to look at automatically; give an axis to get a
-    single specific plane.
+    ``axis=None`` (既定) ではセルの各軸につき 1 枚ずつ描く。自動で眺めるには
+    こちらが便利。特定の面だけが欲しい場合は軸を指定する。
     """
     from ezcal.charge import slice_plane
 
@@ -603,50 +602,468 @@ def plot_charge_slice(cube, outdir: str | Path, backends: Iterable[str] = ("matp
     return written
 
 
-def plot_charge_isosurface(cube, outdir: str | Path, kind: str = "density",
-                           max_points: int = 64, title: str = "") -> list[Path]:
-    """Interactive 3D isosurface (plotly only - a static one adds nothing)."""
-    import plotly.graph_objects as go
 
-    outdir = Path(outdir)
-    outdir.mkdir(parents=True, exist_ok=True)
-    data = np.asarray(cube.density, dtype=float)
-    stride = [max(1, int(np.ceil(n / max_points))) for n in data.shape]
-    data = data[::stride[0], ::stride[1], ::stride[2]]
 
+# ------------------------------------------------------- 電荷密度の 3D 表示
+#: 3D 表示で使う原子の色 (CPK 風。ここに無い元素は既定色)
+_ATOM_COLORS = {
+    "H": "#ffffff", "Li": "#cc80ff", "Be": "#c2ff00", "B": "#ffb5b5", "C": "#404040",
+    "N": "#3050f8", "O": "#ff0d0d", "F": "#90e050", "Na": "#ab5cf2", "Mg": "#8aff00",
+    "Al": "#bfa6a6", "Si": "#f0c8a0", "P": "#ff8000", "S": "#ffff30", "Cl": "#1ff01f",
+    "K": "#8f40d4", "Ca": "#3dff00", "Ti": "#bfc2c7", "Cr": "#8a99c7", "Mn": "#9c7ac7",
+    "Fe": "#e06633", "Co": "#f090a0", "Ni": "#50d050", "Cu": "#c88033", "Zn": "#7d80b0",
+    "Ga": "#c28f8f", "Ge": "#668f8f", "Zr": "#94e0e0", "Nb": "#73c2c9", "Mo": "#54b5b5",
+    "Ag": "#c0c0c0", "Sn": "#668080", "Ba": "#00c900", "W": "#2194d6", "Pt": "#d0d0e0",
+    "Au": "#ffd123", "Pb": "#575961",
+}
+_DEFAULT_ATOM_COLOR = "#909090"
+
+
+def _colormap(name: str):
+    """matplotlib のバージョン差 (cm.get_cmap の廃止) を吸収する。"""
+    import matplotlib
+
+    try:
+        return matplotlib.colormaps[name]
+    except (AttributeError, KeyError):               # pragma: no cover - 古い matplotlib
+        from matplotlib import cm
+
+        return cm.get_cmap(name)
+
+
+def _cell_edges(lattice, origin=None):
+    """セルの 12 稜線を (始点, 終点) の組で返す。"""
+    lattice = np.asarray(lattice, dtype=float)
+    origin = np.zeros(3) if origin is None else np.asarray(origin, dtype=float)
+    corners = {}
+    for i in (0, 1):
+        for j in (0, 1):
+            for k in (0, 1):
+                corners[(i, j, k)] = origin + np.array([i, j, k]) @ lattice
+    edges = []
+    for corner in corners:
+        for axis in range(3):
+            neighbour = list(corner)
+            if neighbour[axis]:
+                continue
+            neighbour[axis] = 1
+            edges.append((corners[corner], corners[tuple(neighbour)]))
+    return edges
+
+
+def _iso_levels(data: np.ndarray, kind: str, levels: Sequence[float] | None = None):
+    """描く等値面の値。指定が無ければ密度分布の分位点から決める。"""
+    if levels:
+        return [float(v) for v in levels], kind in {"spin", "potential"}
+    signed = kind in {"spin", "potential"}
+    if signed:
+        limit = float(np.abs(data).max()) or 1.0
+        return [-0.35 * limit, 0.35 * limit], True
+    finite = data[data > 0]
+    if not finite.size:
+        return [float(data.max())], False
+    return [float(np.percentile(finite, 92)), float(np.percentile(finite, 99))], False
+
+
+def _grid_points(cube, data: np.ndarray) -> np.ndarray:
     n1, n2, n3 = data.shape
     grid = np.stack(np.meshgrid(np.linspace(0, 1, n1, endpoint=False),
                                 np.linspace(0, 1, n2, endpoint=False),
                                 np.linspace(0, 1, n3, endpoint=False),
                                 indexing="ij"), axis=-1)
-    cartesian = grid.reshape(-1, 3) @ cube.lattice
+    return grid.reshape(-1, 3) @ np.asarray(cube.lattice, dtype=float)
 
-    signed = kind in {"spin", "potential"}
-    if signed:
-        limit = float(np.abs(data).max())
-        levels = (-0.25 * limit, 0.25 * limit)
-        colorscale = "RdBu_r"
-    else:
-        finite = data[data > 0]
-        level = float(np.percentile(finite, 96)) if finite.size else float(data.max())
-        levels = (level, float(data.max()))
-        colorscale = "Magma"
 
-    fig = go.Figure(go.Isosurface(
-        x=cartesian[:, 0], y=cartesian[:, 1], z=cartesian[:, 2],
-        value=data.ravel(), isomin=levels[0], isomax=levels[1],
-        surface_count=3, opacity=0.45, colorscale=colorscale,
-        caps=dict(x_show=False, y_show=False, z_show=False),
-        colorbar=dict(title="e/bohr³")))
-    if cube.positions is not None and len(cube.positions):
-        fig.add_trace(go.Scatter3d(
-            x=cube.positions[:, 0], y=cube.positions[:, 1], z=cube.positions[:, 2],
-            mode="markers+text", text=cube.symbols, textposition="top center",
-            marker=dict(size=6, color="#1f4e9c"), name="atoms"))
-    fig.update_layout(template="plotly_white", width=760, height=680,
-                      title=title or f"{kind} isosurface",
-                      scene=dict(xaxis_title="x (Å)", yaxis_title="y (Å)",
-                                 zaxis_title="z (Å)", aspectmode="data"))
-    path = outdir / f"{kind}_isosurface.html"
-    fig.write_html(path, include_plotlyjs="cdn")
-    return [path]
+def _downsample(data: np.ndarray, max_points: int) -> np.ndarray:
+    stride = [max(1, int(np.ceil(n / max_points))) for n in data.shape]
+    return data[::stride[0], ::stride[1], ::stride[2]]
+
+
+def _marching_cubes(data: np.ndarray, level: float, lattice):
+    """周期境界で閉じた等値面 (頂点 Angstrom, 面) を返す。skimage が無ければ None。"""
+    try:
+        from skimage.measure import marching_cubes
+    except ImportError:
+        return None
+    padded = np.pad(data, 1, mode="wrap")            # 端でも面が閉じるようにする
+    if not (padded.min() < level < padded.max()):
+        return None
+    verts, faces, _, _ = marching_cubes(padded, level=level)
+    fractional = (verts - 1.0) / np.array(data.shape, dtype=float)
+    return fractional @ np.asarray(lattice, dtype=float), faces
+
+
+def plot_charge_isosurface(cube, outdir: str | Path, kind: str = "density",
+                           max_points: int = 64, title: str = "",
+                           backends: Iterable[str] = ("plotly",),
+                           levels: Sequence[float] | None = None,
+                           dpi: int = 200, opacity: float = 0.45) -> list[Path]:
+    """電荷密度を空間にマッピングした 3D 等値面。
+
+    plotly 版は回転・拡大ができる対話的な図 (html)、matplotlib 版は報告書に
+    貼れる静止画 (png) を書き出す。静止画では marching cubes で三角形分割した
+    等値面を描き、``scikit-image`` が無い環境では密度の高いボクセルを点群と
+    して描くことで代用する。原子とセルの稜線はどちらの版にも重ねて描く。
+    """
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    backends = list(backends) or ["plotly"]
+    data = _downsample(np.asarray(cube.density, dtype=float), max_points)
+    values, signed = _iso_levels(data, kind, levels)
+    colorscale = "RdBu_r" if signed else "Magma"
+    symbols = cube.symbols
+    positions = (np.asarray(cube.positions, dtype=float)
+                 if cube.positions is not None else np.zeros((0, 3)))
+    written: list[Path] = []
+
+    for backend in backends:
+        if backend == "plotly":
+            import plotly.graph_objects as go
+
+            cartesian = _grid_points(cube, data)
+            fig = go.Figure(go.Isosurface(
+                x=cartesian[:, 0], y=cartesian[:, 1], z=cartesian[:, 2],
+                value=data.ravel(), isomin=min(values), isomax=max(values),
+                surface_count=max(2, len(values)), opacity=opacity,
+                colorscale=colorscale,
+                caps=dict(x_show=False, y_show=False, z_show=False),
+                colorbar=dict(title="e/bohr³"), name=kind))
+            if len(positions):
+                fig.add_trace(go.Scatter3d(
+                    x=positions[:, 0], y=positions[:, 1], z=positions[:, 2],
+                    mode="markers+text", text=symbols, textposition="top center",
+                    marker=dict(size=7, color=[_ATOM_COLORS.get(s, _DEFAULT_ATOM_COLOR)
+                                               for s in symbols],
+                                line=dict(color="#333333", width=1)),
+                    name="atoms"))
+            for start, end in _cell_edges(cube.lattice, cube.origin):
+                fig.add_trace(go.Scatter3d(
+                    x=[start[0], end[0]], y=[start[1], end[1]], z=[start[2], end[2]],
+                    mode="lines", line=dict(color="#8a8a8a", width=2),
+                    showlegend=False, hoverinfo="skip"))
+            fig.update_layout(template="plotly_white", width=780, height=700,
+                              title=title or f"{kind} isosurface",
+                              scene=dict(xaxis_title="x (Å)", yaxis_title="y (Å)",
+                                         zaxis_title="z (Å)", aspectmode="data"))
+            path = outdir / f"{kind}_isosurface.html"
+            fig.write_html(path, include_plotlyjs="cdn")
+            written.append(path)
+
+        elif backend == "matplotlib":
+            plt = _mpl()
+            from matplotlib import colors as mcolors
+            from matplotlib.cm import ScalarMappable
+            from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+            fig = plt.figure(figsize=(7.2, 6.4))
+            panel = fig.add_subplot(111, projection="3d")
+            cmap = _colormap("RdBu_r" if signed else "magma")
+            norm = mcolors.Normalize(vmin=min(values), vmax=max(values))
+            ordered = sorted(values, key=abs)
+            span = max(1, len(ordered) - 1)
+            handles, drawn = [], False
+            for index, level in enumerate(ordered):
+                # 外側 (低い等値面) ほど薄く描かないと内側が見えない
+                colour = (cmap(norm(level)) if signed
+                          else cmap(0.45 + 0.45 * index / span))
+                alpha = opacity * (0.55 + 0.45 * index / span)
+                mesh = _marching_cubes(data, level, cube.lattice)
+                if mesh is None:
+                    continue
+                verts, faces = mesh
+                collection = Poly3DCollection(verts[faces], alpha=alpha,
+                                              linewidths=0.0)
+                collection.set_facecolor(colour)
+                panel.add_collection3d(collection)
+                handles.append(plt.Line2D([], [], marker="s", linestyle="",
+                                          markersize=9, color=colour,
+                                          label=f"{level:.3g} e/bohr³"))
+                drawn = True
+            if not drawn:                             # skimage が無いときの代替表示
+                cloud = _grid_points(cube, data)
+                flat = data.ravel()
+                keep = np.abs(flat) >= min(abs(v) for v in values)
+                panel.scatter(cloud[keep, 0], cloud[keep, 1], cloud[keep, 2],
+                              c=flat[keep], cmap=cmap, s=4, alpha=0.25,
+                              linewidths=0)
+            for start, end in _cell_edges(cube.lattice, cube.origin):
+                panel.plot(*zip(start, end), color="#8a8a8a", lw=0.8)
+            if len(positions):
+                panel.scatter(positions[:, 0], positions[:, 1], positions[:, 2],
+                              c=[_ATOM_COLORS.get(s, _DEFAULT_ATOM_COLOR)
+                                 for s in symbols],
+                              s=90, edgecolors="#333333", linewidths=0.6, depthshade=False)
+                for symbol, position in zip(symbols, positions):
+                    panel.text(*position, f" {symbol}", fontsize=8)
+            if handles:
+                panel.legend(handles=handles, loc="upper left", frameon=False,
+                             fontsize=9, title="isosurface level")
+            else:
+                fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=panel,
+                             shrink=0.65, pad=0.08, label="ρ (e/bohr³)")
+            panel.set_xlabel("x (Å)")
+            panel.set_ylabel("y (Å)")
+            panel.set_zlabel("z (Å)")
+            panel.set_title(title or f"{kind} isosurface", fontsize=11)
+            _equal_aspect_3d(panel, cube.lattice, cube.origin)
+            path = outdir / f"{kind}_isosurface.png"
+            fig.savefig(path, dpi=dpi, bbox_inches="tight")
+            plt.close(fig)
+            written.append(path)
+    return written
+
+
+def _equal_aspect_3d(panel, lattice, origin=None) -> None:
+    """3D 軸の縦横比をセルの実寸に合わせる。"""
+    corners = np.array([start for start, _ in _cell_edges(lattice, origin)])
+    lower, upper = corners.min(axis=0), corners.max(axis=0)
+    centre = (lower + upper) / 2.0
+    radius = float(np.max(upper - lower)) / 2.0 or 1.0
+    panel.set_xlim(centre[0] - radius, centre[0] + radius)
+    panel.set_ylim(centre[1] - radius, centre[1] + radius)
+    panel.set_zlim(centre[2] - radius, centre[2] + radius)
+    try:
+        panel.set_box_aspect((1, 1, 1))
+    except Exception:                                 # pragma: no cover - 古い matplotlib
+        pass
+
+
+# --------------------------------------------------- 原子電荷の 3D マッピング
+#: 原子電荷として使える列 (優先順)
+CHARGE_COLUMNS = (
+    ("bader_charge", "Bader charge (e)"),
+    ("lowdin_charge", "Löwdin charge (e)"),
+    ("bader_electrons", "Bader electrons (e)"),
+    ("lowdin_electrons", "Löwdin electrons (e)"),
+    ("moment_sphere", "magnetic moment (μB)"),
+    ("lowdin_moment", "Löwdin moment (μB)"),
+)
+
+
+def charge_column(rows: Sequence[Mapping], source: str = "auto") -> tuple[str, str]:
+    """3D マッピングに使う列を決める。``(列名, ラベル)``。"""
+    available = {key for row in rows for key, value in row.items() if value is not None}
+    if source and source != "auto":
+        for key, label in CHARGE_COLUMNS:
+            if key == source:
+                return key, label
+        return source, source
+    for key, label in CHARGE_COLUMNS:
+        if key in available:
+            return key, label
+    raise ValueError("原子電荷の列が見つかりません (先に charge タスクを実行してください)")
+
+
+def plot_charge_map_3d(rows: Sequence[Mapping], outdir: str | Path,
+                       backends: Iterable[str] = ("matplotlib",),
+                       lattice=None, source: str = "auto", dpi: int = 200,
+                       title: str = "", name: str = "charge_map") -> list[Path]:
+    """原子ごとの価数を 3D 空間にマッピングする。
+
+    各原子を実座標に配置し、価数 (既定では Bader 電荷、無ければ Löwdin 電荷) で
+    色と大きさを変え、値を文字で添える。陽イオン (電子を失った側) が赤、陰イオンが
+    青になるよう 0 を中心とした発散カラーマップを使う。``rows`` は
+    :func:`ezcal.charge.atomic_charge_table` が返す行 (= ``atomic_charges.csv``)。
+    """
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    rows = [row for row in rows if row.get("x") is not None]
+    if not rows:
+        return []
+    key, label = charge_column(rows, source)
+    values = np.array([float(row.get(key) or 0.0) for row in rows])
+    positions = np.array([[float(row["x"]), float(row["y"]), float(row["z"])]
+                          for row in rows])
+    symbols = [str(row.get("element") or row.get("label") or "?") for row in rows]
+    labels = [str(row.get("label") or row.get("element") or "?") for row in rows]
+    limit = float(np.abs(values).max()) or 1.0
+    sizes = 120.0 + 340.0 * np.abs(values) / limit
+    written: list[Path] = []
+
+    for backend in backends:
+        if backend == "matplotlib":
+            plt = _mpl()
+            from matplotlib import colors as mcolors
+            from matplotlib.cm import ScalarMappable
+
+            fig = plt.figure(figsize=(7.4, 6.4))
+            panel = fig.add_subplot(111, projection="3d")
+            norm = mcolors.Normalize(vmin=-limit, vmax=limit)
+            cmap = _colormap("RdBu_r")
+            if lattice is not None:
+                for start, end in _cell_edges(lattice):
+                    panel.plot(*zip(start, end), color="#8a8a8a", lw=0.8)
+            panel.scatter(positions[:, 0], positions[:, 1], positions[:, 2],
+                          c=values, cmap=cmap, norm=norm, s=sizes,
+                          edgecolors="#222222", linewidths=0.7, depthshade=False)
+            for position, symbol, value in zip(positions, labels, values):
+                panel.text(*position, f"  {symbol} {value:+.2f}", fontsize=8)
+            fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=panel,
+                         shrink=0.65, pad=0.08, label=label)
+            panel.set_xlabel("x (Å)")
+            panel.set_ylabel("y (Å)")
+            panel.set_zlabel("z (Å)")
+            panel.set_title(title or f"atomic charges — {label}", fontsize=11)
+            if lattice is not None:
+                _equal_aspect_3d(panel, lattice)
+            path = outdir / f"{name}.png"
+            fig.savefig(path, dpi=dpi, bbox_inches="tight")
+            plt.close(fig)
+            written.append(path)
+
+        elif backend == "plotly":
+            import plotly.graph_objects as go
+
+            hover = []
+            for row, value in zip(rows, values):
+                parts = [f"<b>{row.get('label') or row.get('element')}</b> "
+                         f"(#{row.get('index')})", f"{label}: {value:+.3f}"]
+                for extra_key, extra_label in CHARGE_COLUMNS:
+                    if extra_key != key and row.get(extra_key) is not None:
+                        parts.append(f"{extra_label}: {float(row[extra_key]):+.3f}")
+                if row.get("bader_volume") is not None:
+                    parts.append(f"Bader volume: {float(row['bader_volume']):.2f} Å³")
+                hover.append("<br>".join(parts))
+            fig = go.Figure(go.Scatter3d(
+                x=positions[:, 0], y=positions[:, 1], z=positions[:, 2],
+                mode="markers+text",
+                text=[f"{s} {v:+.2f}" for s, v in zip(symbols, values)],
+                textposition="top center", hovertext=hover, hoverinfo="text",
+                marker=dict(size=10.0 + 16.0 * np.abs(values) / limit,
+                            color=values, colorscale="RdBu_r", cmin=-limit, cmax=limit,
+                            colorbar=dict(title=_plain(label)),
+                            line=dict(color="#222222", width=1)),
+                name="atoms"))
+            if lattice is not None:
+                for start, end in _cell_edges(lattice):
+                    fig.add_trace(go.Scatter3d(
+                        x=[start[0], end[0]], y=[start[1], end[1]],
+                        z=[start[2], end[2]], mode="lines",
+                        line=dict(color="#8a8a8a", width=2),
+                        showlegend=False, hoverinfo="skip"))
+            fig.update_layout(template="plotly_white", width=780, height=700,
+                              title=title or f"atomic charges — {_plain(label)}",
+                              scene=dict(xaxis_title="x (Å)", yaxis_title="y (Å)",
+                                         zaxis_title="z (Å)", aspectmode="data"))
+            path = outdir / f"{name}.html"
+            fig.write_html(path, include_plotlyjs="cdn")
+            written.append(path)
+    return written
+
+
+# ------------------------------------------------------------ MD / MC の記録
+#: energy_log.csv の列 -> (縦軸ラベル, パネルの見出し)
+DYNAMICS_PANELS = (
+    ("energy_eV", "E$_{pot}$ (eV)", "potential energy"),
+    ("temperature_K", "T (K)", "temperature"),
+    ("e_total_eV", "E$_{tot}$ (eV)", "total energy"),
+    ("volume_A3", "V (Å$^3$)", "volume"),
+    ("msd_A2", "MSD (Å$^2$)", "mean square displacement"),
+)
+
+_PHASE_COLORS = ("#1f4e9c", "#b0392c", "#2f8f52", "#8a5cc7", "#c98a1e", "#3aa3b5")
+
+
+def _phase_segments(phases: Sequence[str]) -> list[tuple[str, np.ndarray]]:
+    """フェーズが連続している区間ごとに分ける。
+
+    MCMD のようにフェーズが交互に現れる記録では、同じフェーズの点を 1 本の線で
+    結ぶと、間に挟まったブロックの上を線が渡ってしまい「その間も値が続いていた」
+    ように見えてしまう。区間で切っておけば、記録が無いところは線が引かれない。
+    """
+    segments: list[tuple[str, np.ndarray]] = []
+    start = 0
+    for index in range(1, len(phases) + 1):
+        if index == len(phases) or phases[index] != phases[start]:
+            segments.append((phases[start], np.arange(start, index)))
+            start = index
+    return segments
+
+
+def plot_dynamics(records: Sequence[Mapping], outdir: str | Path,
+                  backends: Iterable[str] = ("matplotlib",), dpi: int = 200,
+                  title: str = "", name: str = "dynamics") -> list[Path]:
+    """MD / MC の記録 (``energy_log.csv``) を時系列で描く。
+
+    エネルギー・温度・全エネルギー・体積・MSD のうち、記録に存在する量だけを
+    縦に並べる。フェーズ (mcmc / md-nvt / relax ...) は色で区別する。
+    """
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    records = list(records)
+    if not records:
+        return []
+    steps = np.array([float(row.get("step", index))
+                      for index, row in enumerate(records)])
+    phases = [str(row.get("phase", "")) for row in records]
+    order = list(dict.fromkeys(phases))
+    colors = {phase: _PHASE_COLORS[index % len(_PHASE_COLORS)]
+              for index, phase in enumerate(order)}
+
+    segments = _phase_segments(phases)
+    panels = []
+    for key, ylabel, heading in DYNAMICS_PANELS:
+        values = np.array([float(row[key]) if row.get(key) is not None else np.nan
+                           for row in records])
+        if np.isfinite(values).sum() > 1:
+            panels.append((key, ylabel, heading, values))
+    if not panels:
+        return []
+    written: list[Path] = []
+
+    for backend in backends:
+        if backend == "matplotlib":
+            plt = _mpl()
+            fig, grid = plt.subplots(len(panels), 1, sharex=True, squeeze=False,
+                                     figsize=(8.4, 2.3 * len(panels) + 0.8),
+                                     layout="constrained")
+            for (key, ylabel, heading, values), panel in zip(panels, grid[:, 0]):
+                seen: set[str] = set()
+                for phase, index in segments:
+                    if not np.isfinite(values[index]).any():
+                        continue
+                    label = None
+                    if key == panels[0][0] and phase not in seen:
+                        label = phase
+                        seen.add(phase)
+                    panel.plot(steps[index], values[index], ".-", ms=2.2, lw=0.9,
+                               color=colors[phase], label=label)
+                panel.set_ylabel(ylabel)
+                panel.grid(alpha=0.25)
+                panel.set_title(heading, fontsize=9, loc="left", color="0.35")
+            grid[-1, 0].set_xlabel("global step")
+            if len(order) > 1:
+                grid[0, 0].legend(fontsize=8, ncols=min(4, len(order)), frameon=False)
+            fig.suptitle(title or "dynamics", fontsize=11)
+            path = outdir / f"{name}.png"
+            fig.savefig(path, dpi=dpi)
+            plt.close(fig)
+            written.append(path)
+
+        elif backend == "plotly":
+            import plotly.graph_objects as go
+            from plotly.subplots import make_subplots
+
+            fig = make_subplots(rows=len(panels), cols=1, shared_xaxes=True,
+                                subplot_titles=[heading for _, _, heading, _ in panels],
+                                vertical_spacing=0.06)
+            for row_index, (key, ylabel, _, values) in enumerate(panels, start=1):
+                seen = set()
+                for phase, index in segments:
+                    if not np.isfinite(values[index]).any():
+                        continue
+                    show = row_index == 1 and phase not in seen
+                    seen.add(phase)
+                    fig.add_trace(go.Scatter(
+                        x=steps[index], y=values[index], mode="lines+markers",
+                        marker=dict(size=3), line=dict(color=colors[phase], width=1.2),
+                        name=phase, legendgroup=phase,
+                        showlegend=show), row=row_index, col=1)
+                fig.update_yaxes(title_text=_plain(ylabel), row=row_index, col=1)
+            fig.update_xaxes(title_text="global step", row=len(panels), col=1)
+            fig.update_layout(template="plotly_white", height=260 * len(panels) + 120,
+                              width=960, title=title or "dynamics")
+            path = outdir / f"{name}.html"
+            fig.write_html(path, include_plotlyjs="cdn")
+            written.append(path)
+    return written

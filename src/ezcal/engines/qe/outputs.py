@@ -1,9 +1,8 @@
-"""Parsers for Quantum ESPRESSO output.
+"""Quantum ESPRESSO の出力パーサ。
 
-The XML schema written into ``<outdir>/<prefix>.save/data-file-schema.xml``
-is the primary source (it is complete and machine readable); the text
-output of ``pw.x`` is only used for run-time information and error
-messages.
+主たる情報源は ``<outdir>/<prefix>.save/data-file-schema.xml`` に書き出される
+XML スキーマである (内容が網羅的で機械可読なため)。``pw.x`` のテキスト出力は、
+実行時情報とエラーメッセージの取得にのみ使う。
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ def _floats(text: str | None) -> np.ndarray:
 
 @dataclass
 class PwXml:
-    """Structured view of ``data-file-schema.xml``."""
+    """``data-file-schema.xml`` を構造化して保持するクラス。"""
 
     path: Path
     energy: float | None = None                  # eV
@@ -53,7 +52,7 @@ class PwXml:
     lattice: np.ndarray | None = None            # (3, 3) Angstrom
     positions_frac: np.ndarray | None = None
     symbols: list[str] = field(default_factory=list)
-    labels: list[str] = field(default_factory=list)   # pw.x species labels
+    labels: list[str] = field(default_factory=list)   # pw.x の元素ラベル
     ecutwfc: float | None = None
     ecutrho: float | None = None
     functional: str | None = None
@@ -62,7 +61,7 @@ class PwXml:
     spacegroup: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
-    # -- derived --------------------------------------------------------
+    # -- 派生量 ----------------------------------------------------------
     @property
     def band_gap(self) -> float | None:
         if self.homo is None or self.lumo is None:
@@ -100,7 +99,7 @@ def parse_xml(path: str | Path) -> PwXml:
     if etot:
         res.energy = float(etot) * HARTREE_EV
 
-    # -- structure -------------------------------------------------------
+    # -- 構造 ------------------------------------------------------------
     struct = out.find("atomic_structure")
     if struct is not None:
         cell = struct.find("cell")
@@ -123,7 +122,7 @@ def parse_xml(path: str | Path) -> PwXml:
                 res.symbols = symbols
                 res.labels = labels
 
-    # -- basis / dft -----------------------------------------------------
+    # -- 基底 / DFT ------------------------------------------------------
     ecutwfc = out.findtext("basis_set/ecutwfc")
     if ecutwfc:
         res.ecutwfc = float(ecutwfc) * 2.0            # Hartree -> Ry
@@ -132,7 +131,7 @@ def parse_xml(path: str | Path) -> PwXml:
         res.ecutrho = float(ecutrho) * 2.0
     res.functional = out.findtext("dft/functional")
 
-    # -- magnetisation ---------------------------------------------------
+    # -- 磁化 ------------------------------------------------------------
     total_mag = out.findtext("magnetization/total")
     if total_mag:
         res.magnetization = float(total_mag)
@@ -140,7 +139,7 @@ def parse_xml(path: str | Path) -> PwXml:
     if abs_mag:
         res.absolute_magnetization = float(abs_mag)
 
-    # -- forces / stress -------------------------------------------------
+    # -- 力 / 応力 -------------------------------------------------------
     forces = out.findtext("forces")
     if forces:
         arr = _floats(forces)
@@ -153,7 +152,7 @@ def parse_xml(path: str | Path) -> PwXml:
             res.stress = arr.reshape(3, 3) * STRESS_HA_BOHR3_TO_GPA
             res.pressure = float(np.trace(res.stress) / 3.0)
 
-    # -- band structure --------------------------------------------------
+    # -- バンド構造 ------------------------------------------------------
     bs = out.find("band_structure")
     if bs is not None:
         res.lsda = (bs.findtext("lsda") or "false").strip().lower() == "true"
@@ -187,7 +186,7 @@ def parse_xml(path: str | Path) -> PwXml:
             eigs.append(_floats(entry.findtext("eigenvalues")) * HARTREE_EV)
             occs.append(_floats(entry.findtext("occupations")))
         if kpts:
-            kcart = np.array(kpts)                     # units of 2*pi/alat
+            kcart = np.array(kpts)                     # 単位は 2*pi/alat
             if alat and res.lattice is not None:
                 cell_bohr = res.lattice / BOHR_ANG
                 res.kpoints_frac = kcart @ cell_bohr.T / alat
@@ -217,7 +216,7 @@ def _homo_lumo(eig: np.ndarray, occ: np.ndarray, tol: float = 1e-4):
     return homo, lumo
 
 
-# ------------------------------------------------------------- text output
+# ------------------------------------------------------------ テキスト出力
 _WALL_RE = re.compile(r"PWSCF\s*:.*?([\d.]+)s\s+WALL", re.IGNORECASE)
 _TIME_RE = re.compile(r"([\d.]+)m?\s*([\d.]+)?s\s+WALL")
 
@@ -226,30 +225,31 @@ _SITE_MAG_RE = re.compile(
     r"atom\s+(\d+)\s*\(R=[\d.]+\)\s+charge=\s*(-?[\d.]+)\s+magn=\s*(-?[\d.]+)")
 
 
-#: recognisable pw.x failures -> what to actually do about them
+#: 判別できる pw.x の失敗 -> それに対して実際に取るべき対処
 ERROR_HINTS: tuple[tuple[str, str], ...] = (
     (r"S matrix not positive definite|routine cdiaghg",
-     "the Davidson diagonalisation broke down: try --set dft.diagonalization=cg, or raise "
-     "the cutoffs (this is common when ecutwfc is below the value the PAW/USPP "
-     "pseudopotential asks for - 'ezcal pseudo fetch <element>' prints it)"),
+     "Davidson 対角化が破綻しました: --set dft.diagonalization=cg を試すか、カットオフを"
+     "上げてください (PAW/USPP 擬ポテンシャルが要求する値より ecutwfc が低いときによく"
+     "起こります。要求値は 'ezcal pseudo fetch <元素>' で確認できます)"),
     (r"convergence NOT achieved",
-     "SCF did not converge: lower the mixing with --set dft.mixing_beta=0.2, try "
-     "--set dft.mixing_mode=local-TF for a metal, or widen --degauss"),
+     "SCF が収束しませんでした: --set dft.mixing_beta=0.2 でミキシングを弱めるか、金属なら "
+     "--set dft.mixing_mode=local-TF を試すか、--degauss を広げてください"),
     (r"too many bands are not converged",
-     "raise --nbnd, or --set dft.electron_maxstep to a larger value"),
+     "--nbnd を増やすか、--set dft.electron_maxstep をより大きな値にしてください"),
     (r"charge is wrong",
-     "the charge density went bad: raise ecutrho, or start from a better initial "
-     "magnetisation with --magmom"),
+     "電荷密度が破綻しました: ecutrho を上げるか、--magmom でより適切な初期磁化から"
+     "始めてください"),
     (r"Not enough space allocated for radial FFT",
-     "raise ecutrho (--ecutrho), the augmentation charge does not fit the grid"),
+     "ecutrho (--ecutrho) を上げてください。補強電荷がグリッドに収まっていません"),
     (r"Maximum CPU time exceeded",
-     "the job hit its time limit: raise run.timeout or the queue walltime"),
+     "ジョブが時間制限に達しました: run.timeout かキューの walltime を延ばしてください"),
     (r"reading namelist|bad namelist|invalid.*namelist",
-     "pw.x rejected the input file: check the values passed with --set"),
+     "pw.x が入力ファイルを受け付けませんでした: --set で渡した値を確認してください"),
     (r"some processors have no G-vectors|too few G-vectors",
-     "too many MPI ranks for this cell: lower --np"),
+     "このセルに対して MPI プロセス数が多すぎます: --np を減らしてください"),
     (r"problems computing cholesky",
-     "ill-conditioned overlap matrix: try --set dft.diagonalization=cg or raise the cutoffs"),
+     "重なり行列の条件が悪くなっています: --set dft.diagonalization=cg を試すか、"
+     "カットオフを上げてください"),
 )
 
 
@@ -261,9 +261,9 @@ class PwText:
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     hints: list[str] = field(default_factory=list)
-    scf_energies: list[float] = field(default_factory=list)   # eV, one per scf step
+    scf_energies: list[float] = field(default_factory=list)   # eV。scf ステップごとに 1 つ
     nsteps: int = 0
-    site_magnetization: list[float] = field(default_factory=list)   # Bohr magneton
+    site_magnetization: list[float] = field(default_factory=list)   # ボーア磁子
     total_magnetization: float | None = None
     absolute_magnetization: float | None = None
 
@@ -281,7 +281,7 @@ def parse_pw_text(path: str | Path) -> PwText:
                         re.findall(r"^!\s+total energy\s+=\s+(-?[\d.]+)\s+Ry", text, re.M)]
     res.nsteps = len(re.findall(r"iteration #", text))
 
-    # the last "Magnetic moment per site" block belongs to the converged state
+    # 最後の "Magnetic moment per site" ブロックが収束後の状態に対応する
     blocks = text.split("Magnetic moment per site")
     if len(blocks) > 1:
         res.site_magnetization = [float(m.group(3))
@@ -298,17 +298,20 @@ def parse_pw_text(path: str | Path) -> PwText:
         if block and block not in res.errors:
             res.errors.append(block[:500])
     if "Maximum CPU time exceeded" in text:
-        res.errors.append("maximum CPU time exceeded")
+        res.errors.append("CPU 時間の上限に達しました (Maximum CPU time exceeded)")
     for pattern, message in (
-        (r"convergence NOT achieved", "SCF convergence not achieved"),
-        (r"too many bands are not converged", "too many bands are not converged"),
-        (r"negative rho \(up, down\)", None),      # routine output, not a problem
+        # メッセージ本文には英語の原文も残す。下のヒント照合はこの文字列を正規表現で
+        # 走査するため、原文を落とすとヒントが出なくなる
+        (r"convergence NOT achieved", "SCF が収束していません (convergence NOT achieved)"),
+        (r"too many bands are not converged",
+         "収束していないバンドが多すぎます (too many bands are not converged)"),
+        (r"negative rho \(up, down\)", None),      # 通常の出力であり、問題ではない
     ):
         if message and re.search(pattern, text):
             res.warnings.append(message)
 
-    # hints are matched against the reported problems, never the whole output:
-    # "cdiaghg" also appears in the timing table of every healthy run
+    # ヒントの照合対象は検出済みの問題文だけで、出力全体ではない。"cdiaghg" は正常に
+    # 終わった計算でも必ず時間集計表に現れるためである
     haystack = " ".join(res.errors + res.warnings)
     for pattern, hint in ERROR_HINTS:
         if re.search(pattern, haystack, re.IGNORECASE) and hint not in res.hints:
@@ -345,7 +348,7 @@ def _parse_wall(line: str) -> float | None:
 
 # ---------------------------------------------------------------- dos.x
 def read_dos(path: str | Path) -> dict:
-    """Read a ``dos.x`` output file (E, dos, integrated dos)."""
+    """``dos.x`` の出力ファイル (E, dos, 積分 dos) を読む。"""
     path = Path(path)
     fermi = None
     with path.open("r", encoding="utf-8", errors="replace") as fh:
@@ -355,7 +358,7 @@ def read_dos(path: str | Path) -> dict:
         fermi = float(match.group(1))
     data = np.loadtxt(path, comments="#")
     out = {"energy": data[:, 0], "fermi_energy": fermi}
-    if data.shape[1] >= 4:              # spin polarised: E, dosup, dosdw, idos
+    if data.shape[1] >= 4:              # スピン分極: E, dosup, dosdw, idos
         out["dos_up"] = data[:, 1]
         out["dos_down"] = data[:, 2]
         out["dos"] = data[:, 1] + data[:, 2]
@@ -367,16 +370,16 @@ def read_dos(path: str | Path) -> dict:
 
 
 # --------------------------------------------------------------- projwfc
-# the species field can be a sublattice label ("Ni1"), not just an element
+# 元素種の欄には素の元素記号だけでなく副格子ラベル ("Ni1") も入りうる
 _PDOS_RE = re.compile(
     r"pdos_atm#(\d+)\(([A-Za-z][A-Za-z0-9_\-]*)\)_wfc#(\d+)\(([a-z]).*\)")
 
 
 def read_pdos(workdir: str | Path, filpdos: str = "pdos") -> dict:
-    """Collect ``projwfc.x`` output into per element / per orbital channels.
+    """``projwfc.x`` の出力を、元素ごと / 軌道ごとのチャンネルにまとめる。
 
-    For a spin polarised run the up and down channels are kept apart
-    (``per_orbital_up`` / ``per_orbital_down``) as well as summed.
+    スピン分極計算では、up と down を合算したものに加えて、両者を分けたもの
+    (``per_orbital_up`` / ``per_orbital_down``) も保持する。
     """
     workdir = Path(workdir)
     files = sorted(workdir.glob(f"{filpdos}.pdos_atm#*"))

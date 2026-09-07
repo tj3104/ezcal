@@ -1,21 +1,21 @@
-"""Charge density and atomic charges.
+"""電荷密度と原子電荷。
 
-Three independent views of "where the electrons are", all from output ezcal
-already produces:
+「電子がどこにいるか」を、ezcal が既に生成している出力だけから 3 通りの
+独立した見方で示す:
 
-``pp.x`` cube files
-    the density itself, on the FFT grid.  ``plot_num=0`` is the pseudo
-    (valence) density, ``6`` the spin density, ``17`` the all-electron
-    valence density and ``21`` the full all-electron density - the last two
-    are PAW reconstructions and are what a Bader partition wants.
-Loewdin charges
-    already present in the ``projwfc.x`` output the DOS step runs, so they
-    cost nothing extra.  They also give a per-atom magnetic moment
-    (``polarization``) independent of the sphere-integrated one pw.x prints.
-Bader charges
-    a grid partition of the density into atomic basins.  The on-grid
-    algorithm of Henkelman, Arnaldsson and Jonsson (Comput. Mater. Sci. 36,
-    354 (2006)) is implemented here so no external binary is needed.
+``pp.x`` の cube ファイル
+    FFT グリッド上の電荷密度そのもの。``plot_num=0`` は擬ポテンシャルの
+    価電子密度、``6`` はスピン密度、``17`` は全電子の価電子密度、``21`` は
+    内殻を含む全電子密度。後ろの 2 つは PAW 再構成であり、Bader 分割に
+    適しているのはこちら。
+Loewdin 電荷
+    DOS ステップで実行される ``projwfc.x`` の出力に既に含まれているため、
+    追加コストはゼロ。pw.x が出力する球積分値とは独立に、原子ごとの磁気
+    モーメント (``polarization``) も得られる。
+Bader 電荷
+    電荷密度をグリッド上で原子ベイスンに分割したもの。Henkelman, Arnaldsson,
+    Jonsson の on-grid アルゴリズム (Comput. Mater. Sci. 36, 354 (2006)) を
+    ここで実装しているため、外部バイナリは不要。
 """
 
 from __future__ import annotations
@@ -29,13 +29,13 @@ import numpy as np
 
 BOHR_ANG = 0.529177210903
 
-#: pp.x plot_num values ezcal knows how to ask for
+#: ezcal が指定方法を把握している pp.x の plot_num
 PLOT_NUM = {
-    "density": 0,           # pseudo (valence) charge density
-    "spin": 6,              # spin density, rho_up - rho_down
-    "ae_valence": 17,       # all-electron valence density (PAW only)
-    "ae_total": 21,         # all-electron density incl. core (PAW only)
-    "potential": 11,        # bare + Hartree potential
+    "density": 0,           # 擬ポテンシャルの価電子密度
+    "spin": 6,              # スピン密度、rho_up - rho_down
+    "ae_valence": 17,       # 全電子の価電子密度 (PAW のみ)
+    "ae_total": 21,         # 内殻を含む全電子密度 (PAW のみ)
+    "potential": 11,        # 裸のポテンシャル + ハートリーポテンシャル
 }
 
 
@@ -43,17 +43,17 @@ class ChargeError(RuntimeError):
     pass
 
 
-# ------------------------------------------------------------------- cube I/O
+# ------------------------------------------------------------------ cube I/O
 @dataclass
 class CubeData:
-    """A Gaussian cube file as written by ``pp.x``.
+    """``pp.x`` が書き出す Gaussian cube ファイル。
 
-    ``density`` keeps the file's own units (e/bohr^3); lattice and positions
-    are converted to Angstrom because that is what the rest of ezcal uses.
+    ``density`` はファイル本来の単位 (e/bohr^3) のまま保持する。格子と原子位置は
+    ezcal の他の部分に合わせて Angstrom に変換する。
     """
 
-    density: np.ndarray                  # (n1, n2, n3), e/bohr^3
-    lattice: np.ndarray                  # (3, 3) Angstrom, rows are cell vectors
+    density: np.ndarray                  # (n1, n2, n3)、e/bohr^3
+    lattice: np.ndarray                  # (3, 3) Angstrom、各行がセルベクトル
     origin: np.ndarray                   # (3,) Angstrom
     numbers: list[int] = field(default_factory=list)
     positions: np.ndarray | None = None  # (nat, 3) Angstrom
@@ -66,7 +66,7 @@ class CubeData:
 
     @property
     def volume(self) -> float:
-        """Cell volume in Angstrom^3."""
+        """セルの体積 (Angstrom^3)。"""
         return float(abs(np.linalg.det(self.lattice)))
 
     @property
@@ -75,7 +75,7 @@ class CubeData:
 
     @property
     def electrons(self) -> float:
-        """Integral of the density over the cell."""
+        """セル全体にわたる電荷密度の積分値。"""
         return float(self.density.sum() * self.voxel_volume_bohr)
 
     @property
@@ -89,11 +89,11 @@ class CubeData:
 
 
 def read_cube(path: str | Path) -> CubeData:
-    """Read a Gaussian cube file (the format ``pp.x`` writes with output_format=6)."""
+    """Gaussian cube ファイルを読む (``pp.x`` の output_format=6 で出力される形式)。"""
     path = Path(path)
     with path.open("r", encoding="utf-8", errors="replace") as handle:
         handle.readline()
-        handle.readline()                                  # two comment lines
+        handle.readline()                                  # コメント行が 2 行
 
         fields = handle.readline().split()
         natoms = int(fields[0])
@@ -104,7 +104,7 @@ def read_cube(path: str | Path) -> CubeData:
             fields = handle.readline().split()
             counts.append(int(fields[0]))
             vectors.append([float(v) for v in fields[1:4]])
-        # a negative count means the axis is in Angstrom already
+        # 点数が負の場合、その軸は既に Angstrom 単位
         voxel = np.array(vectors) * np.array(
             [BOHR_ANG if n > 0 else 1.0 for n in counts])[:, None]
         counts = [abs(n) for n in counts]
@@ -127,11 +127,11 @@ def read_cube(path: str | Path) -> CubeData:
                     numbers=numbers, positions=positions, path=path)
 
 
-# --------------------------------------------------------------- 1D / 2D views
+# -------------------------------------------------------------- 1D / 2D 表示
 def planar_average(cube: CubeData, axis: int = 2) -> tuple[np.ndarray, np.ndarray]:
-    """Average over the two directions perpendicular to ``axis``.
+    """``axis`` に垂直な 2 方向について平均を取る。
 
-    Returns (distance along the axis in Angstrom, average density).
+    戻り値は (軸に沿った距離 (Angstrom), 平均密度)。
     """
     others = tuple(i for i in range(3) if i != axis)
     average = cube.density.mean(axis=others)
@@ -142,7 +142,7 @@ def planar_average(cube: CubeData, axis: int = 2) -> tuple[np.ndarray, np.ndarra
 
 def slice_plane(cube: CubeData, axis: int = 2,
                 fraction: float = 0.5) -> tuple[np.ndarray, tuple[float, float, float, float]]:
-    """A single grid plane through the cell, plus its extent in Angstrom."""
+    """セルを横切るグリッド 1 面と、その広がり (Angstrom)。"""
     n = cube.shape[axis]
     index = int(round(fraction * n)) % n
     data = np.take(cube.density, index, axis=axis)
@@ -152,16 +152,16 @@ def slice_plane(cube: CubeData, axis: int = 2,
     return data, extent
 
 
-# --------------------------------------------------------------- Bader basins
+# ------------------------------------------------------------- Bader ベイスン
 @dataclass
 class BaderResult:
-    electrons: np.ndarray                  # per atom
-    volumes: np.ndarray                    # per atom, Angstrom^3
-    charges: np.ndarray | None = None      # reference - electrons (positive = cation)
+    electrons: np.ndarray                  # 原子ごと
+    volumes: np.ndarray                    # 原子ごと、Angstrom^3
+    charges: np.ndarray | None = None      # 基準値 - 電子数 (正なら陽イオン)
     reference: np.ndarray | None = None
-    n_maxima: int = 0                      # basins holding a meaningful charge
-    n_maxima_raw: int = 0                  # every local maximum on the grid
-    max_offset: float = 0.0                # furthest significant maximum from its atom, A
+    n_maxima: int = 0                      # 意味のある電荷を持つベイスンの数
+    n_maxima_raw: int = 0                  # グリッド上の極大点すべて
+    max_offset: float = 0.0                # 有意な極大点と担当原子との最大距離 (A)
     total_electrons: float = 0.0
     grid: tuple[int, int, int] = (0, 0, 0)
     messages: list[str] = field(default_factory=list)
@@ -181,27 +181,24 @@ class BaderResult:
 def bader_charges(cube: CubeData, reference: Sequence[float] | None = None,
                   warn_offset: float = 0.6, significant: float = 0.01,
                   expected_electrons: float | None = None) -> BaderResult:
-    """Partition the density into atomic basins (on-grid Bader).
+    """電荷密度を原子ベイスンに分割する (on-grid Bader 法)。
 
-    Every grid point walks uphill to the steepest of its 26 neighbours, using
-    the real-space step length so the ascent is not biased by the cell shape.
-    Points that reach the same maximum form one basin, and each basin is
-    given to the nearest atom.
+    各グリッド点は 26 近傍のうち最も急な方向へ登っていく。その際に実空間での
+    ステップ長を使うため、セル形状によって登り方が偏ることはない。同じ極大点に
+    到達した点が 1 つのベイスンを構成し、各ベイスンは最も近い原子に割り当てられる。
 
-    ``reference`` is the electron count each atom would have if neutral -
-    ``Z_valence`` for a pseudo or all-electron *valence* density, the atomic
-    number for a full all-electron density.  With it, ``charges`` becomes the
-    transferred charge in units of e (positive = electrons removed).
+    ``reference`` は各原子が中性であるときの電子数。擬ポテンシャルまたは全電子の
+    *価電子* 密度なら ``Z_valence``、内殻を含む全電子密度なら原子番号を渡す。これを
+    与えると ``charges`` が電荷移動量 (単位 e、正なら電子が奪われた側) になる。
 
-    ``expected_electrons`` turns on the one check that catches a bad density:
-    the integral over the cell has to come out at the electron count the
-    calculation actually had.  A PAW reconstruction on too coarse a grid
-    fails exactly here.
+    ``expected_electrons`` を渡すと、密度が破綻していないかを判定できる唯一の
+    チェックが有効になる。すなわち、セル全体の積分値が実際の計算の電子数と一致
+    しなければならない。粗すぎるグリッド上の PAW 再構成はまさにここで失敗する。
     """
     density = np.ascontiguousarray(cube.density, dtype=float)
     n1, n2, n3 = density.shape
     if cube.positions is None or len(cube.positions) == 0:
-        raise ChargeError("the cube file carries no atomic positions")
+        raise ChargeError("この cube ファイルには原子位置が含まれていません")
     natoms = len(cube.positions)
 
     voxel = cube.lattice / np.array([n1, n2, n3], dtype=float)[:, None]
@@ -224,7 +221,7 @@ def bader_charges(cube: CubeData, reference: Sequence[float] | None = None,
                 best_slope = np.where(better, slope, best_slope)
                 parent = np.where(better, np.roll(index, shift, axis=(0, 1, 2)), parent)
 
-    # pointer jumping: every point ends up pointing straight at its maximum
+    # ポインタジャンプ: 最終的にすべての点が自分の極大点を直接指すようにする
     flat = parent.ravel()
     for _ in range(64):
         nxt = flat[flat]
@@ -239,7 +236,7 @@ def bader_charges(cube: CubeData, reference: Sequence[float] | None = None,
 
     atom_frac = cube.fractional_positions()
     delta = maxima_frac[:, None, :] - atom_frac[None, :, :]
-    delta -= np.round(delta)                                   # minimum image
+    delta -= np.round(delta)                                   # 最小イメージ規約
     distances = np.linalg.norm(delta @ cube.lattice, axis=2)
     owner = distances.argmin(axis=1)
     offsets = distances[np.arange(len(maxima)), owner]
@@ -250,9 +247,9 @@ def bader_charges(cube: CubeData, reference: Sequence[float] | None = None,
                             minlength=natoms) * cube.voxel_volume_bohr
     volumes = np.bincount(atom_of_point, minlength=natoms) * voxel_volume
 
-    # a smooth pseudo density has many shallow local maxima in the interstitial;
-    # they are merged into the nearest atom and are not a problem.  Only basins
-    # whose peak is a real feature of the density are worth checking.
+    # 滑らかな擬電荷密度は格子間領域に浅い極大点を多数持つ。これらは最寄りの原子に
+    # 併合されるので問題にならない。検査する価値があるのは、ピークが密度の実体的な
+    # 特徴となっているベイスンだけである。
     peak = density.ravel()[maxima]
     strong = peak > significant * float(density.max())
 
@@ -270,22 +267,22 @@ def bader_charges(cube: CubeData, reference: Sequence[float] | None = None,
         drift = 100.0 * (result.total_electrons - expected_electrons) / expected_electrons
         if abs(drift) > 0.5:
             result.messages.append(
-                f"the density integrates to {result.total_electrons:.3f} e but the "
-                f"calculation had {expected_electrons:.3f}: {drift:+.2f} %.  On a PAW "
-                "reconstruction (plot_num 17/21) this means the FFT grid is too coarse "
-                "for the cusps - use plot_num=0, or raise ecutrho")
+                f"電荷密度の積分値が {result.total_electrons:.3f} e ですが、計算の電子数は "
+                f"{expected_electrons:.3f} です ({drift:+.2f} %)。PAW 再構成 "
+                "(plot_num 17/21) の場合、これは尖点に対して FFT グリッドが粗すぎることを"
+                "意味します。plot_num=0 を使うか、ecutrho を上げてください")
     if result.max_offset > warn_offset:
         result.messages.append(
-            f"a basin holding real charge peaks {result.max_offset:.2f} A from any atom - "
-            "either a non-nuclear attractor or a grid that is too coarse")
+            f"実体的な電荷を持つベイスンのピークが、どの原子からも {result.max_offset:.2f} A "
+            "離れています。非核アトラクタか、グリッドが粗すぎるかのどちらかです")
     if reference is not None and abs(float(result.charges.sum())) > 0.05:
         result.messages.append(
-            f"the basin charges sum to {result.charges.sum():+.3f} e instead of 0; "
-            "check that the reference electron counts match the density that was used")
+            f"ベイスン電荷の総和が 0 ではなく {result.charges.sum():+.3f} e になっています。"
+            "基準電子数が、使用した電荷密度と整合しているか確認してください")
     return result
 
 
-# ------------------------------------------------------------ Loewdin charges
+# ----------------------------------------------------------- Loewdin 電荷
 _ATOM_RE = re.compile(r"Atom #\s*(\d+):\s*total charge\s*=\s*(-?[\d.]+)")
 _SPIN_UP_RE = re.compile(r"spin up\s*=\s*(-?[\d.]+)")
 _SPIN_DN_RE = re.compile(r"spin down\s*=\s*(-?[\d.]+)")
@@ -295,11 +292,11 @@ _SPILL_RE = re.compile(r"Spilling Parameter:\s*(-?[\d.]+)")
 
 
 def parse_lowdin(path: str | Path) -> dict:
-    """Read the Loewdin charges out of a ``projwfc.x`` output file.
+    """``projwfc.x`` の出力ファイルから Loewdin 電荷を読み取る。
 
-    projwfc.x already runs in the DOS step, so this costs nothing extra.  It
-    yields a per-atom charge, its s/p/d/f breakdown and - for a spin
-    polarised run - a per-atom magnetic moment (QE calls it ``polarization``).
+    projwfc.x は DOS ステップで既に実行されているため、追加コストはかからない。
+    原子ごとの電荷、その s/p/d/f 分解、そしてスピン分極計算であれば原子ごとの
+    磁気モーメント (QE の言う ``polarization``) が得られる。
     """
     path = Path(path)
     if not path.is_file():
@@ -333,13 +330,13 @@ def parse_lowdin(path: str | Path) -> dict:
             polar = _POLAR_RE.search(line)
             if polar:
                 entry["lowdin_moment"] = float(polar.group(1))
-            continue                                   # orbital-resolved moments, skip
+            continue                                   # 軌道分解のモーメント行は読み飛ばす
         up, down = _SPIN_UP_RE.search(line), _SPIN_DN_RE.search(line)
         if up:
             entry["lowdin_up"] = float(up.group(1))
         if down:
             entry["lowdin_down"] = float(down.group(1))
-        if not up and not down:                        # the "total charge" line
+        if not up and not down:                        # "total charge" の行
             for symbol, value in _ORBITAL_RE.findall(line):
                 entry["orbitals"][symbol] = float(value)
 
@@ -350,12 +347,12 @@ def parse_lowdin(path: str | Path) -> dict:
     return {"atoms": rows, "spilling": spilling}
 
 
-# --------------------------------------------------------------- assembly
+# ---------------------------------------------------------------- 集約処理
 def atomic_charge_table(structure, lowdin: dict | None = None,
                         bader: BaderResult | None = None,
                         site_moments: Sequence[float] | None = None,
                         valence: Sequence[float] | None = None) -> list[dict]:
-    """One row per atom, merging everything that is available."""
+    """利用できる情報をすべて統合し、原子ごとに 1 行を作る。"""
     from ezcal.structures import site_labels
 
     labels = site_labels(structure)

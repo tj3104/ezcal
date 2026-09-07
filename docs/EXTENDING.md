@@ -17,13 +17,18 @@ ezcal/
 ├── pseudo.py         擬ポテンシャル索引/取得/UPF ヘッダ解析 (QE 専用)
 ├── scheduler.py      Local / Qsub / dry-run  ← ジョブ投入はここだけが知っている
 ├── workflows.py      タスク連鎖 (bands なら scf を前に流す等)
+├── md.py             MD / モンテカルロ (material-mc のラッパ)
+├── charge.py         cube I/O・Bader 分割・Loewdin 電荷・原子電荷表
 ├── plotting.py       matplotlib / plotly
+├── calculators/      ASE calculator の解決層
+│   ├── __init__.py   レシピの探索と解決 (script > factory > backend)
+│   └── recipes/      1 ファイル 1 ポテンシャル (sevennet.py, mace.py, emt.py, ...)
 └── engines/
     ├── base.py       Engine ABC と CalcResult
     ├── __init__.py   レジストリ (register / get_engine)
     ├── qe/           Quantum ESPRESSO (inputs.py / outputs.py / engine.py)
     ├── vasp.py       VASP (骨組み)
-    └── mlip.py       SevenNet ほか ASE calculator 系
+    └── mlip.py       ASE calculator 系 (calculator の作り方は calculators/ が持つ)
 ```
 
 ## 1. 最小のエンジン
@@ -115,26 +120,69 @@ INCAR・KPOINTS・POSCAR、`out` に vasprun.xml などの出力を置きます�
 `--magmom` / `--afm` の値は変換せずそのまま渡します。QE は価電子数に対する割合、
 VASP は μB と解釈が違いますが、いずれも初期値であり、意味を持つのは符号のパターンだからです。
 
-## 3. 別の MLIP を足す
+## 3. 別の MLIP / NNP を足す
 
-`engines/mlip.py` の `MLIPEngine.calculator()` に分岐を 1 つ足すだけです。
-ASE calculator を返せば、単点計算・構造最適化・セル最適化はすべて共通コードが
-面倒を見ます。
+**ASE の calculator を 1 つ返せれば動きます。** ezcal 本体に手を入れる必要はありません。
+`engines/mlip.py` は calculator の作り方を知らず、`ezcal.calculators` に任せています。
+MD / MC (`ezcal md` / `ezcal mc`) も同じ解決層を使うので、一度足せば両方で使えます。
+
+指定方法は 3 通りで、上のものが優先されます。
+
+| 方法 | 設定キー | CLI |
+|---|---|---|
+| ユーザーの Python スクリプト | `mlip.script` | `--calc-script my_potential.py` |
+| import パス | `mlip.factory` | `--calc-factory mace.calculators:mace_mp` |
+| 同梱・追加のレシピ名 | `mlip.backend` | `--mlip-backend sevennet --model 7net-l3i5` |
+
+いずれの場合も `mlip.options` (= `--calc-option key=value`) が `build()` の
+キーワード引数になります。`mlip.model` / `mlip.device` は、そのレシピが引数として
+受け取れる場合にだけ自動で渡されます (EMT のようにモデルの概念が無いレシピには渡らない)。
+
+### 3.1 レシピを 1 ファイル書く
+
+`src/ezcal/calculators/recipes/` と同じ形式のファイルです。雛形は
+`ezcal mlip template -o my_potential.py` で取り出せます。
 
 ```python
-elif backend == "mace":
-    from mace.calculators import mace_mp
-    self._calc = mace_mp(model=model, device=device)
+NAME = "mypotential"
+ALIASES = ("mypot",)
+DESCRIPTION = "一覧に出る 1 行説明"
+REQUIRES = ("mypotential",)            # import できなければ導入方法を案内する
+INSTALL = "uv pip install mypotential"
+DEFAULTS = {"device": "cpu"}           # build() の既定引数
+MODELS = ("small", "large")            # 一覧表示用 (これ以外も渡せる)
+
+
+def build(model=None, device="cpu", **options):
+    from mypotential import MyCalculator
+    return MyCalculator(model=model, device=device, **options)
 ```
 
-`qe_config.yaml`:
+置き場所は 2 通りです。
+
+* `src/ezcal/calculators/recipes/` に置く → 同梱レシピとして常に見える
+* 任意のディレクトリに置き、`mlip.recipe_dirs` にそのディレクトリを足す
+  → `--mlip-backend mypotential` で選べる (パッケージは触らない)
+
+`ezcal mlip list` に出るか、`ezcal mlip check --build` で実際に作れるかを確認できます。
+
+### 3.2 設定ファイルの例
 
 ```yaml
-engine: mlip
+engine: mlip                 # scf / relax / vc-relax を MLIP で回す場合
 mlip:
   backend: mace
   model: medium
-  device: cpu
+  device: cuda
+  options: {default_dtype: float64}
+```
+
+```yaml
+md:                          # ezcal md / mc は engine を見ず mlip: だけを見る
+  mode: mcmd
+mlip:
+  script: ~/potentials/my_potential.py
+  options: {checkpoint: ~/ckpt/best.pth}
 ```
 
 ## 4. スケジューラを足す
@@ -144,7 +192,22 @@ mlip:
 `{{COMMANDS}}` に実行行が展開されます。`sbatch` 用テンプレートを
 `run.qsub.script` に指定し `submit_cmd`/`status_cmd` を変えるだけでも動きます。
 
-## 5. タスクを足す
+## 5. MD / MC のモードを足す
+
+`ezcal md` / `ezcal mc` は material-mc の `run_*` メソッドを 1 つのモードに対応させて
+呼んでいるだけです。material-mc 側にメソッドが増えたら、`md.py` の `_MODE_LIST` に
+1 行足し、必要なら `build_arguments()` に引数の組み立てを書きます。
+
+```python
+ModeSpec("my-mode", "run_my_mode", "説明", "mc", note="一覧に出る補足")
+```
+
+`kind` は引数の作り方の分類です (`md` / `mc` / `cycle` / `relax` / `event`)。
+CLI・作図・レポートはモード名を知らないので、他のファイルは触りません。
+後処理 (energy_log.csv の読み取り、時系列の作図、summary.json / report.md) は
+全モード共通です。
+
+## 6. タスクを足す
 
 `workflows.CHAINS` に「そのタスクを実行するのに必要な前段」を書きます。
 

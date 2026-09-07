@@ -1,9 +1,9 @@
-"""Execution back-ends: run locally with mpirun, or submit with qsub.
+"""実行バックエンド: mpirun でローカル実行するか、qsub でジョブ投入する。
 
-A *stage* is an ordered list of :class:`Command` objects that must run one
-after another (for example ``pw.x`` then ``dos.x``).  The scheduler is the
-only place that knows how a stage becomes actual work, which keeps the
-engines and the workflows free of any queueing-system detail.
+*ステージ* とは、順番に実行しなければならない :class:`Command` の並び
+(例えば ``pw.x`` の後に ``dos.x``) を指す。ステージを実際の処理に落とし込む
+方法を知っているのはスケジューラだけであり、そのおかげでエンジンやワークフロー
+はキューイングシステムの詳細を一切持たずに済む。
 """
 
 from __future__ import annotations
@@ -27,13 +27,13 @@ class SchedulerError(RuntimeError):
 
 @dataclass
 class Command:
-    """One executable invocation."""
+    """実行ファイル 1 回分の呼び出し。"""
 
     executable: str
     args: list[str] = field(default_factory=list)
     stdout: Path | None = None
     stdin: Path | None = None
-    parallel: bool = True          # wrap with mpirun?
+    parallel: bool = True          # mpirun で包むかどうか
     label: str = ""
 
     def render(self, mpirun: str | None = None, nproc: int = 1,
@@ -59,7 +59,7 @@ class Stage:
     name: str
     commands: list[Command]
     workdir: Path
-    env: dict[str, str] = field(default_factory=dict)   # extra environment variables
+    env: dict[str, str] = field(default_factory=dict)   # 追加の環境変数
 
 
 @dataclass
@@ -74,7 +74,7 @@ class JobResult:
 
 
 class Scheduler:
-    """Base class."""
+    """基底クラス。"""
 
     name = "base"
 
@@ -93,7 +93,7 @@ class Scheduler:
         raise NotImplementedError
 
     def write_command_script(self, stage: Stage) -> JobResult:
-        """Dry run: record the exact command line without executing it."""
+        """ドライラン: 実行はせず、実際のコマンドラインだけを書き出す。"""
         lines = [f"export {key}={shlex.quote(str(value))}"
                  for key, value in sorted(stage.env.items())]
         lines += [cmd.shell(self.mpirun, self.nproc, self.mpirun_flags)
@@ -113,7 +113,7 @@ class Scheduler:
 
 
 class LocalScheduler(Scheduler):
-    """Run the commands right here, one after another."""
+    """コマンドをこの場で順番に実行する。"""
 
     name = "local"
 
@@ -132,8 +132,8 @@ class LocalScheduler(Scheduler):
             argv = cmd.render(self.mpirun, self.nproc, self.mpirun_flags)
             if shutil.which(argv[0]) is None and not Path(argv[0]).is_file():
                 raise SchedulerError(
-                    f"executable not found: {argv[0]}\n"
-                    "  set it in qe_config.yaml (qe.bin_dir / qe.commands.*)"
+                    f"実行ファイルが見つかりません: {argv[0]}\n"
+                    "  qe_config.yaml で設定してください (qe.bin_dir / qe.commands.*)"
                 )
             log.append(cmd.shell(self.mpirun, self.nproc, self.mpirun_flags))
             out_handle = cmd.stdout.open("w", encoding="utf-8") if cmd.stdout else None
@@ -150,7 +150,7 @@ class LocalScheduler(Scheduler):
                     check=False,
                 )
             except subprocess.TimeoutExpired as exc:
-                raise SchedulerError(f"{cmd.label or argv[0]} timed out after {timeout}s") from exc
+                raise SchedulerError(f"{cmd.label or argv[0]} が {timeout} 秒でタイムアウトしました") from exc
             finally:
                 if out_handle:
                     out_handle.close()
@@ -169,7 +169,7 @@ class LocalScheduler(Scheduler):
 
 
 class QsubScheduler(Scheduler):
-    """Write a job script from ``run_qe.sh`` and submit it with ``qsub``."""
+    """``run_qe.sh`` からジョブスクリプトを生成し、``qsub`` で投入する。"""
 
     name = "qsub"
 
@@ -185,14 +185,14 @@ class QsubScheduler(Scheduler):
     def blocking(self) -> bool:
         return self.wait
 
-    # -- script generation ----------------------------------------------
+    # -- スクリプト生成 ----------------------------------------------------
     def template_text(self) -> str:
         raw = self.settings.get("script", "run_qe.sh")
         for candidate in (Path(raw).expanduser(), Path.cwd() / raw, TEMPLATE_DIR / "run_qe.sh"):
             if candidate.is_file():
                 return candidate.read_text(encoding="utf-8")
         raise SchedulerError(
-            f"qsub template {raw!r} not found (looked in ., $PWD and {TEMPLATE_DIR})"
+            f"qsub の雛形 {raw!r} が見つかりません (., $PWD, {TEMPLATE_DIR} を探索)"
         )
 
     def render_script(self, stage: Stage) -> str:
@@ -218,7 +218,7 @@ class QsubScheduler(Scheduler):
         text = self.template_text()
         for key, value in mapping.items():
             text = text.replace("{{" + key + "}}", value)
-        # a queue directive with an empty value would break the script
+        # キュー名が空のままディレクティブを残すとスクリプトが壊れるため取り除く
         if not mapping["QUEUE"]:
             text = "\n".join(
                 line for line in text.splitlines()
@@ -226,7 +226,7 @@ class QsubScheduler(Scheduler):
             ) + "\n"
         return text
 
-    # -- submission ------------------------------------------------------
+    # -- ジョブ投入 --------------------------------------------------------
     def execute(self, stage: Stage) -> JobResult:
         stage.workdir.mkdir(parents=True, exist_ok=True)
         script_path = stage.workdir / f"{stage.name}.qsub.sh"
@@ -235,13 +235,13 @@ class QsubScheduler(Scheduler):
 
         if self.dry_run:
             return JobResult(ok=True, submitted_only=True, script=script_path,
-                             log=[f"dry run: {script_path} written, not submitted"])
+                             log=[f"ドライラン: {script_path} を書き出しました (投入はしていません)"])
 
         if shutil.which(self.submit_cmd) is None:
             raise SchedulerError(
-                f"'{self.submit_cmd}' is not available on this machine.\n"
-                f"  The job script was still written to {script_path}\n"
-                "  Submit it by hand, or use --scheduler local."
+                f"この計算機では '{self.submit_cmd}' を利用できません。\n"
+                f"  ジョブスクリプト自体は {script_path} に書き出してあります。\n"
+                "  手動で投入するか、--scheduler local を使ってください。"
             )
 
         start = time.time()
@@ -261,11 +261,11 @@ class QsubScheduler(Scheduler):
         if not self.wait:
             return JobResult(ok=True, job_id=job_id, submitted_only=True,
                              elapsed=time.time() - start, script=script_path,
-                             log=[f"submitted {job_id}"])
+                             log=[f"{job_id} を投入しました"])
 
         self._wait_for(job_id)
         return JobResult(ok=True, job_id=job_id, elapsed=time.time() - start,
-                         script=script_path, log=[f"finished {job_id}"])
+                         script=script_path, log=[f"{job_id} が完了しました"])
 
     def _wait_for(self, job_id: str | None) -> None:
         if not job_id:
@@ -292,4 +292,4 @@ def get_scheduler(config) -> Scheduler:
         return LocalScheduler(config)
     if name in {"qsub", "pbs", "torque"}:
         return QsubScheduler(config)
-    raise SchedulerError(f"unknown scheduler {name!r} (use 'local' or 'qsub')")
+    raise SchedulerError(f"未知のスケジューラです: {name!r} ('local' か 'qsub' を指定してください)")

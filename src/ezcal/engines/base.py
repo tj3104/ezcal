@@ -1,4 +1,4 @@
-"""The engine interface every calculation back-end implements."""
+"""すべての計算バックエンドが実装するエンジンインターフェース。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 
 import numpy as np
 
-#: canonical task names used across ezcal
+#: ezcal 全体で共通して使うタスク名
 TASKS = ("scf", "relax", "vc-relax", "nscf", "bands", "dos", "pdos")
 
 
@@ -33,7 +33,7 @@ def _jsonable(value: Any) -> Any:
 
 @dataclass
 class CalcResult:
-    """Outcome of one calculation step, engine independent."""
+    """1 ステップ分の計算結果 (エンジン非依存の共通表現)。"""
 
     task: str
     engine: str
@@ -41,20 +41,20 @@ class CalcResult:
     workdir: Path = field(default_factory=Path)
     prefix: str = "ezcal"
 
-    energy: float | None = None                 # eV, total energy
-    energy_per_atom: float | None = None        # eV/atom
+    energy: float | None = None                 # eV、全エネルギー
+    energy_per_atom: float | None = None        # eV/原子
     fermi_energy: float | None = None           # eV
     homo: float | None = None
     lumo: float | None = None
     band_gap: float | None = None               # eV
-    magnetization: float | None = None          # Bohr magneton / cell (net)
-    abs_magnetization: float | None = None      # integral of |m(r)|, non-zero for AFM
-    site_magnetization: list[float] | None = None   # per atom, Bohr magneton
+    magnetization: float | None = None          # ボーア磁子/セル (正味の値)
+    abs_magnetization: float | None = None      # |m(r)| の積分。反強磁性でも 0 にならない
+    site_magnetization: list[float] | None = None   # 原子ごと、ボーア磁子
     forces: list[list[float]] | None = None     # eV/Angstrom
     max_force: float | None = None
     stress: list[list[float]] | None = None     # GPa
     pressure: float | None = None               # GPa
-    structure: Any = None                       # pymatgen Structure (relaxed)
+    structure: Any = None                       # pymatgen の Structure (最適化後)
     nelec: float | None = None
     nbnd: int | None = None
     kmesh: list[int] | None = None
@@ -62,12 +62,12 @@ class CalcResult:
     converged: bool = False
     walltime: float | None = None
     files: dict[str, str] = field(default_factory=dict)
-    data: dict[str, Any] = field(default_factory=dict)   # bands / dos payloads
+    data: dict[str, Any] = field(default_factory=dict)   # バンド / DOS のデータ本体
     messages: list[str] = field(default_factory=list)
     job_id: str | None = None
     submitted_only: bool = False
 
-    # -- serialisation ---------------------------------------------------
+    # -- シリアライズ ------------------------------------------------------
     def summary(self) -> dict:
         keys = (
             "task", "engine", "ok", "converged", "energy", "energy_per_atom",
@@ -94,10 +94,10 @@ class CalcResult:
 
 
 class Engine:
-    """Base class for calculation back-ends.
+    """計算バックエンドの基底クラス。
 
-    A back-end has to provide :meth:`run`; everything else (config parsing,
-    scheduling, plotting, workflow orchestration) is shared.
+    バックエンド側で用意すべきなのは :meth:`run` のみ。設定の解釈、ジョブ投入、
+    作図、ワークフロー制御は共通処理として提供される。
     """
 
     name = "base"
@@ -107,20 +107,20 @@ class Engine:
         self.config = config
         self.scheduler = scheduler
 
-    # -- capability ------------------------------------------------------
+    # -- 対応状況 ----------------------------------------------------------
     def supports(self, task: str) -> bool:
         return task in self.supported
 
     def check(self) -> list[str]:
-        """Return a list of problems that would stop this engine from running."""
+        """このエンジンが実行できない理由を列挙して返す。"""
         return []
 
-    # -- execution -------------------------------------------------------
+    # -- 実行 --------------------------------------------------------------
     def run(self, structure, task: str, workdir: Path, prev: CalcResult | None = None,
             **kwargs) -> CalcResult:
         raise NotImplementedError
 
-    # -- helpers ---------------------------------------------------------
+    # -- 補助関数 ----------------------------------------------------------
     @staticmethod
     def _kmesh(config, structure) -> list[int]:
         from ezcal.structures import auto_kmesh

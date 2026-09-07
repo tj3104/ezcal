@@ -1,11 +1,10 @@
-"""Pseudopotential management.
+"""擬ポテンシャルの管理。
 
-ezcal ships an index of every UPF file published on
-``pseudopotentials.quantum-espresso.org`` (the PSLibrary / legacy tables).
-Missing files are downloaded on demand into ``qe.pseudo_dir`` and their
-headers are parsed so that plane-wave cutoffs, valence electron counts and
-the pseudopotential type are known without the user having to look
-anything up.
+ezcal は ``pseudopotentials.quantum-espresso.org`` (PSLibrary および旧テーブル)
+で公開されている全 UPF ファイルの索引を同梱している。手元に無いファイルは必要に
+応じて ``qe.pseudo_dir`` へダウンロードし、ヘッダを解析する。これにより、平面波
+カットオフ、価電子数、擬ポテンシャルの種別を、ユーザーが自分で調べなくても
+把握できる。
 """
 
 from __future__ import annotations
@@ -21,7 +20,7 @@ from typing import Iterable, Mapping, Sequence
 INDEX_PATH = Path(__file__).with_name("data") / "upf_index.json"
 DEFAULT_SOURCE = "https://pseudopotentials.quantum-espresso.org/upf_files"
 
-#: functional keyword -> tokens accepted in a UPF file name
+#: 汎関数のキーワード -> UPF ファイル名中で許容されるトークン
 FUNCTIONAL_ALIASES = {
     "pbe": ("pbe",),
     "pbesol": ("pbesol",),
@@ -45,7 +44,7 @@ _TYPE_TOKENS = (
     ("nc", "NC"),
 )
 
-#: charge-density / wavefunction cutoff ratio per pseudopotential type
+#: 擬ポテンシャル種別ごとの、電荷密度カットオフと波動関数カットオフの比 (dual)
 DUAL = {"PAW": 8.0, "USPP": 8.0, "NC": 4.0}
 
 
@@ -55,7 +54,7 @@ class PseudoError(RuntimeError):
 
 @dataclass
 class PseudoInfo:
-    """Everything ezcal needs to know about one UPF file."""
+    """1 つの UPF ファイルについて ezcal が必要とする情報一式。"""
 
     element: str
     filename: str
@@ -63,7 +62,7 @@ class PseudoInfo:
     pseudo_type: str = "USPP"
     z_valence: float = 0.0
     functional: str = ""
-    ecutwfc: float | None = None      # Ry, as suggested by the generator
+    ecutwfc: float | None = None      # Ry。擬ポテンシャル作成者の推奨値
     ecutrho: float | None = None
 
     @property
@@ -71,7 +70,7 @@ class PseudoInfo:
         return DUAL.get(self.pseudo_type, 8.0)
 
 
-# --------------------------------------------------------------- index I/O
+# ------------------------------------------------------------------ 索引 I/O
 def load_index() -> dict[str, list[str]]:
     if not INDEX_PATH.is_file():
         return {}
@@ -116,7 +115,7 @@ def candidates(element: str, functional: str = "pbe", relativistic: bool = False
 
 def rank_candidates(element: str, files: Sequence[str],
                     preference: Sequence[str] = ("kjpaw", "rrkjus", "oncv")) -> list[str]:
-    """Sort candidate file names, best first."""
+    """候補のファイル名を、望ましい順に並べ替える。"""
     pref = [p.lower() for p in preference]
 
     def key(name: str):
@@ -128,14 +127,14 @@ def rank_candidates(element: str, files: Sequence[str],
     return sorted(files, key=key)
 
 
-# ------------------------------------------------------------ UPF parsing
+# --------------------------------------------------------------- UPF の解析
 _CUT_WFC_RE = re.compile(r"cutoff for wavefunctions?:\s*([0-9.]+)", re.IGNORECASE)
 _CUT_RHO_RE = re.compile(r"cutoff for charge density:\s*([0-9.]+)", re.IGNORECASE)
 _ATTR_RE = re.compile(r'(\w+)\s*=\s*"([^"]*)"')
 
 
 def parse_upf(path: Path, element: str | None = None) -> PseudoInfo:
-    """Read the informative part of a UPF header (first ~200 lines)."""
+    """UPF ヘッダの情報部分 (先頭 200 行程度) を読み取る。"""
     head_lines: list[str] = []
     with path.open("r", encoding="utf-8", errors="replace") as fh:
         for i, line in enumerate(fh):
@@ -182,7 +181,7 @@ def parse_upf(path: Path, element: str | None = None) -> PseudoInfo:
             except ValueError:
                 pass
 
-    if not info.z_valence:                       # UPF v1 fixed format fallback
+    if not info.z_valence:                       # UPF v1 の固定書式へのフォールバック
         match = re.search(r"([0-9.]+)\s+Z valence", head)
         if match:
             info.z_valence = float(match.group(1))
@@ -193,9 +192,9 @@ def parse_upf(path: Path, element: str | None = None) -> PseudoInfo:
     return info
 
 
-# ----------------------------------------------------------------- manager
+# ------------------------------------------------------------------ 管理クラス
 class PseudoManager:
-    """Resolve element -> UPF file, downloading from the QE website if needed."""
+    """元素から UPF ファイルを決定する。必要なら QE のサイトからダウンロードする。"""
 
     def __init__(
         self,
@@ -219,7 +218,7 @@ class PseudoManager:
         self.index = load_index()
         self._cache: dict[str, PseudoInfo] = {}
 
-    # -- lookup ---------------------------------------------------------
+    # -- 探索 --------------------------------------------------------------
     def _search_dirs(self) -> list[Path]:
         return [self.pseudo_dir, *self.extra_dirs]
 
@@ -245,11 +244,11 @@ class PseudoManager:
         return None
 
     def _adopt(self, path: Path) -> Path:
-        """Copy a file found in an extra directory into ``pseudo_dir``.
+        """追加ディレクトリで見つかったファイルを ``pseudo_dir`` へコピーする。
 
-        The generated pw.x input names the file and sets ``pseudo_dir`` once,
-        so a pseudopotential picked up somewhere else has to be brought in or
-        pw.x fails with 'file ... not found'.
+        生成される pw.x 入力はファイル名を書き、``pseudo_dir`` は 1 つしか指定
+        できない。そのため別の場所で見つけた擬ポテンシャルは取り込んでおかないと、
+        pw.x が 'file ... not found' で失敗してしまう。
         """
         import shutil
 
@@ -270,14 +269,14 @@ class PseudoManager:
             with urllib.request.urlopen(request, timeout=90) as response:
                 payload = response.read()
         except (urllib.error.URLError, TimeoutError) as exc:
-            raise PseudoError(f"could not download {url}: {exc}") from exc
+            raise PseudoError(f"{url} をダウンロードできませんでした: {exc}") from exc
         if len(payload) < 1000 or b"<UPF" not in payload[:4000] and b"<PP_INFO" not in payload[:4000]:
-            raise PseudoError(f"{url} did not return a UPF file")
+            raise PseudoError(f"{url} から返ってきたのは UPF ファイルではありません")
         target.write_bytes(payload)
         return target
 
     def resolve(self, element: str) -> PseudoInfo:
-        """Return a :class:`PseudoInfo` for ``element``, downloading if allowed."""
+        """``element`` の :class:`PseudoInfo` を返す。許可されていればダウンロードも行う。"""
         if element in self._cache:
             return self._cache[element]
 
@@ -292,7 +291,7 @@ class PseudoManager:
             if local is None and self.download:
                 local = self._fetch(pinned)
             if local is None:
-                raise PseudoError(f"pinned pseudopotential {pinned} not found for {element}")
+                raise PseudoError(f"{element} に指定された擬ポテンシャル {pinned} が見つかりません")
             info = parse_upf(self._adopt(local), element)
             self._cache[element] = info
             return info
@@ -310,14 +309,14 @@ class PseudoManager:
         )
         if not options:
             raise PseudoError(
-                f"no {self.functional.upper()} pseudopotential known for {element}; "
-                f"put a UPF file in {self.pseudo_dir} or pin one with "
-                f"--set qe.pseudo_map.{element}=<file.UPF>"
+                f"{element} の {self.functional.upper()} 擬ポテンシャルは登録されていません。"
+                f"{self.pseudo_dir} に UPF ファイルを置くか、"
+                f"--set qe.pseudo_map.{element}=<file.UPF> で明示的に指定してください"
             )
         if not self.download:
             raise PseudoError(
-                f"{element}: {options[0]} is missing from {self.pseudo_dir} and "
-                "downloading is disabled (qe.pseudo_download: false)"
+                f"{element}: {options[0]} が {self.pseudo_dir} にありません。"
+                "かつダウンロードが無効化されています (qe.pseudo_download: false)"
             )
         path = self._fetch(options[0])
         info = parse_upf(path, element)
@@ -327,11 +326,11 @@ class PseudoManager:
     def resolve_all(self, elements: Iterable[str]) -> dict[str, PseudoInfo]:
         return {el: self.resolve(el) for el in dict.fromkeys(elements)}
 
-    # -- derived quantities ---------------------------------------------
+    # -- 派生量 ------------------------------------------------------------
     @staticmethod
     def suggest_cutoffs(infos: Iterable[PseudoInfo], safety: float = 1.0,
                         fallback_wfc: float = 60.0) -> tuple[float, float]:
-        """Largest generator-suggested cutoff over all species, times ``safety``."""
+        """全元素の推奨カットオフの最大値に ``safety`` を掛けた値を返す。"""
         infos = list(infos)
         wfc = max((i.ecutwfc for i in infos if i.ecutwfc), default=None) or fallback_wfc
         duals = [i.dual for i in infos] or [8.0]

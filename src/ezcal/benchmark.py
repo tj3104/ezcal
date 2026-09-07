@@ -1,29 +1,28 @@
-"""Benchmark suite: run a fixed set of small cells and compare with reference data.
+"""ベンチマーク一式: 決められた小さなセル群を計算し、参照値と比較する。
 
-The point is to be able to answer "is this ezcal installation producing the
-right numbers?" on a new machine with one command.  Structures are built from
-prototypes plus experimental lattice constants, so the suite needs no network
-and no API key; Materials Project values are looked up at report time when a
-key is available.
+目的は「この ezcal 環境は正しい数値を出しているか」を、新しい計算機上で
+コマンド一つで確かめられるようにすること。構造はプロトタイプと実験格子定数から
+構築するため、ネットワークも API キーも不要。Materials Project の値は、キーが
+利用できる場合にレポート作成時に参照する。
 
-Quantities compared
--------------------
+比較する物理量
+--------------
 ========================  ============================  =====================
-quantity                  where it comes from           compared against
+物理量                    取得元                        比較対象
 ========================  ============================  =====================
-lattice a, c, c/a         vc-relax                      experiment, MP
-volume per atom           vc-relax                      experiment, MP
-density                   vc-relax                      experiment, MP
-bulk modulus B0, B0'      Birch-Murnaghan fit of E(V)   experiment
-band gap (+ direct?)      nscf on a dense mesh          experiment, MP
-magnetic moment           scf                           experiment, MP
-N(E_F)                    dos.x                         literature (metals)
-d-band centre             projwfc.x                     literature (metals)
+格子定数 a, c, c/a        vc-relax                      実験値, MP
+原子あたり体積            vc-relax                      実験値, MP
+密度                      vc-relax                      実験値, MP
+体積弾性率 B0, B0'        E(V) の Birch-Murnaghan 近似  実験値
+バンドギャップ (直接か)   密メッシュでの nscf           実験値, MP
+磁気モーメント            scf                           実験値, MP
+N(E_F)                    dos.x                         文献値 (金属)
+d バンド中心              projwfc.x                     文献値 (金属)
 ========================  ============================  =====================
 
-Cohesive and formation energies are deliberately left out: they need isolated
-atom / O2 references and anion corrections to be meaningful, which is a
-different piece of work from checking that an installation is sane.
+凝集エネルギーと生成エネルギーは意図的に除外している。意味のある値にするには
+孤立原子や O2 の参照計算と陰イオン補正が必要であり、環境が正常かを確かめるという
+本来の目的とは別の作業になるため。
 """
 
 from __future__ import annotations
@@ -47,24 +46,24 @@ class BenchmarkError(RuntimeError):
     pass
 
 
-# ------------------------------------------------------------- prototypes
+# ------------------------------------------------------------ プロトタイプ
 def _hex_lattice(a: float, c: float):
     from pymatgen.core import Lattice
 
     return Lattice.hexagonal(a, c)
 
 
-#: prototypes whose cell must be kept as built (a primitive reduction would
-#: throw away the sites the magnetic order needs)
+#: 構築したままのセルを保たなければならないプロトタイプ (プリミティブ縮約を
+#: すると、磁気秩序に必要なサイトが失われてしまう)
 KEEP_AS_BUILT = {"rocksalt_afm2"}
 
 
 def build_structure(entry: "BenchEntry", primitive: bool = True):
-    """Build the starting structure from the prototype and lattice constants.
+    """プロトタイプと格子定数から初期構造を構築する。
 
-    ``from_spacegroup`` gives the conventional cell; the suite runs the
-    primitive one, except for the antiferromagnetic prototypes where the
-    larger cell *is* the magnetic unit cell.
+    ``from_spacegroup`` が返すのは従来格子。ベンチマークではプリミティブセルを
+    計算するが、反強磁性プロトタイプだけは例外で、大きいセルそのものが磁気単位胞に
+    あたるためそのまま使う。
     """
     structure = _build_conventional(entry)
     if not primitive or entry.prototype in KEEP_AS_BUILT:
@@ -125,18 +124,18 @@ def _build_conventional(entry: "BenchEntry"):
                                          [[0.25, 0.25, 0.25], [0, 0, 0]])
 
     if kind == "rocksalt_afm2":
-        # AFM-II rocksalt: the rhombohedral cell that doubles along [111], so
-        # the (111) planes of the cation alternate in spin.  2 formula units.
+        # AFM-II 岩塩型: [111] 方向に 2 倍にした菱面体セル。陽イオンの (111) 面が
+        # スピンの向きを交互に取る。化学式単位は 2 つ。
         matrix = a * np.array([[0.5, 0.5, 1.0], [0.5, 1.0, 0.5], [1.0, 0.5, 0.5]])
         cation, anion = species
         return Structure(Lattice(matrix), [cation, cation, anion, anion],
                          [[0, 0, 0], [0.5, 0.5, 0.5], [0.25, 0.25, 0.25], [0.75, 0.75, 0.75]])
 
-    raise BenchmarkError(f"unknown prototype {kind!r}")
+    raise BenchmarkError(f"未知のプロトタイプです: {kind!r}")
 
 
 def _species(formula: str) -> list[str]:
-    """``"SrTiO3"`` -> ``["Sr", "Ti", "O"]`` (distinct elements, in order)."""
+    """``"SrTiO3"`` -> ``["Sr", "Ti", "O"]`` (重複を除いた元素を出現順に)。"""
     from pymatgen.core import Composition
 
     composition = Composition(formula)
@@ -149,7 +148,7 @@ def _species(formula: str) -> list[str]:
     return seen or [str(el) for el in composition.elements]
 
 
-# ------------------------------------------------------------------ suite
+# ------------------------------------------------------------ ベンチマーク一式
 @dataclass
 class BenchEntry:
     name: str
@@ -169,7 +168,7 @@ class BenchEntry:
 
     @property
     def natoms(self) -> int:
-        """Atoms in the cell the suite actually runs."""
+        """実際に計算するセルに含まれる原子数。"""
         try:
             return len(build_structure(self))
         except Exception:
@@ -177,7 +176,7 @@ class BenchEntry:
 
 
 def load_suite(which: str = "all", path: str | Path | None = None) -> list[BenchEntry]:
-    """Read the packaged benchmark definition."""
+    """同梱のベンチマーク定義を読み込む。"""
     data = yaml.safe_load(Path(path or SUITE_PATH).read_text(encoding="utf-8"))
     common = dict(data.get("defaults", {}) or {})
     groups = GROUPS if which in {"all", ""} else tuple(
@@ -214,7 +213,7 @@ def load_suite(which: str = "all", path: str | Path | None = None) -> list[Bench
 
 
 def entry_config(entry: BenchEntry, base):
-    """Config for one entry: the suite settings on top of the user's config."""
+    """1 エントリ分の設定。ユーザー設定の上にベンチマーク側の設定を重ねる。"""
     cfg = base.update({})
     mapping = {"conv_thr": "dft.conv_thr", "kspacing": "dft.kspacing",
                "degauss": "dft.degauss", "smearing": "dft.smearing",
@@ -233,9 +232,9 @@ def entry_config(entry: BenchEntry, base):
     return cfg
 
 
-# ------------------------------------------------- equation of state (B0)
+# ------------------------------------------------------ 状態方程式 (B0)
 def eos_points(strains: Sequence[float], structure) -> list:
-    """Isotropically scaled copies of ``structure``."""
+    """``structure`` を等方的にスケールした複製を作る。"""
     out = []
     for strain in strains:
         scaled = structure.copy()
@@ -245,7 +244,7 @@ def eos_points(strains: Sequence[float], structure) -> list:
 
 
 def fit_eos(volumes: Sequence[float], energies: Sequence[float]) -> dict:
-    """Birch-Murnaghan fit -> V0 (A^3), E0 (eV), B0 (GPa), B0'."""
+    """Birch-Murnaghan フィット -> V0 (A^3)、E0 (eV)、B0 (GPa)、B0'。"""
     volumes = np.asarray(volumes, dtype=float)
     energies = np.asarray(energies, dtype=float)
     if len(volumes) < 4 or not np.all(np.isfinite(energies)):
@@ -255,7 +254,7 @@ def fit_eos(volumes: Sequence[float], energies: Sequence[float]) -> dict:
 
         eos = EquationOfState(volumes.tolist(), energies.tolist(), eos="birchmurnaghan")
         v0, e0, b0 = eos.fit()
-        # ASE returns B0 in eV/A^3
+        # ASE が返す B0 の単位は eV/A^3
         result = {"v0": float(v0), "e0": float(e0), "b0": float(b0) * 160.21766208}
         coefficients = getattr(eos, "eos_parameters", None)
         if coefficients is not None and len(coefficients) > 3:
@@ -265,11 +264,11 @@ def fit_eos(volumes: Sequence[float], energies: Sequence[float]) -> dict:
         return {}
 
 
-# ------------------------------------------------------------ DOS metrics
+# ---------------------------------------------------------- DOS 由来の指標
 def dos_metrics(dos_payload: Mapping[str, Any] | None,
                 pdos_payload: Mapping[str, Any] | None,
                 fermi: float | None, natoms: int) -> dict:
-    """N(E_F) and the d-band centre, both standard descriptors for metals."""
+    """N(E_F) と d バンド中心。いずれも金属を特徴づける標準的な指標。"""
     out: dict[str, Any] = {}
     if not dos_payload or fermi is None:
         return out
@@ -296,7 +295,7 @@ def dos_metrics(dos_payload: Mapping[str, Any] | None,
         d_total = values if d_total is None else d_total + values
     if d_total is None:
         return out
-    # integrate over the occupied part only; that is the quantity people quote
+    # 占有部分のみで積分する。一般に引用されるのはこの定義の値
     window = d_energy <= fermi
     weight = d_total[window]
     if weight.sum() <= 0:
@@ -306,23 +305,22 @@ def dos_metrics(dos_payload: Mapping[str, Any] | None,
     return out
 
 
-# -------------------------------------------------------- structure facts
-#: atoms in the conventional cubic cell of each cubic prototype.  The lattice
-#: constant then follows from the volume per atom, which is the only robust
-#: route when the cell is slightly distorted - an antiferromagnet relaxes
-#: rhombohedrally and its conventional cell is hexagonal, so its "a" is a
-#: nearest-neighbour distance rather than the cubic edge - and it does not care
-#: whether the cell at hand is primitive or conventional.
+# ------------------------------------------------------------ 構造に関する値
+#: 各立方晶プロトタイプの従来立方セルに含まれる原子数。格子定数は原子あたり体積
+#: から求める。セルがわずかに歪んでいる場合でも破綻しないのはこの方法だけである
+#: (反強磁性体は菱面体的に緩和し、その従来格子は六方晶になるため、"a" は立方セルの
+#: 稜ではなく最近接原子間距離になってしまう)。また、手元のセルがプリミティブか
+#: 従来格子かにも依存しない。
 CUBIC_CONVENTIONAL_ATOMS = {"fcc": 4, "bcc": 2, "diamond": 8, "rocksalt": 8,
                             "fluorite": 12, "antifluorite": 12, "perovskite": 5,
                             "cuprite": 6, "rocksalt_afm2": 8}
 
-#: prototypes whose a and c are only comparable when the phase really matches
+#: 相が本当に一致している場合にのみ a と c を比較できるプロトタイプ
 NON_CUBIC = {"hcp", "wurtzite", "rutile", "anatase"}
 
 
 def structure_metrics(structure, prototype: str | None = None) -> dict:
-    """Lattice parameters, volume per atom and density of a relaxed cell."""
+    """緩和後セルの格子定数、原子あたり体積、密度。"""
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
     lattice = structure.lattice
@@ -352,13 +350,13 @@ def structure_metrics(structure, prototype: str | None = None) -> dict:
     return out
 
 
-# ------------------------------------------------------------------ runner
+# ------------------------------------------------------------------ 実行部
 DEFAULT_STRAINS = (-0.04, -0.02, 0.0, 0.02, 0.04)
 
 
 def run_eos(entry: BenchEntry, config, structure, workdir: Path,
             strains: Sequence[float] = DEFAULT_STRAINS, log=print) -> dict:
-    """scf at a few isotropically scaled volumes, then a Birch-Murnaghan fit."""
+    """等方的にスケールした数点の体積で scf を行い、Birch-Murnaghan でフィットする。"""
     from ezcal.engines import get_engine
     from ezcal.scheduler import get_scheduler
 
@@ -367,10 +365,10 @@ def run_eos(entry: BenchEntry, config, structure, workdir: Path,
     volumes: list[float] = []
     energies: list[float] = []
 
-    # one mesh for every volume: letting kspacing pick a different mesh per point
-    # puts steps into E(V) and the fitted bulk modulus comes out meaningless
+    # 全体積で同じ k メッシュを使う。kspacing に点ごとのメッシュを選ばせると E(V) に
+    # 段差が生じ、フィットして得られる体積弾性率が意味を成さなくなる
     kmesh = engine._kmesh(config, structure)
-    log(f"    EOS: {len(strains)} volumes at a fixed {kmesh[0]}x{kmesh[1]}x{kmesh[2]} mesh")
+    log(f"    EOS: {kmesh[0]}x{kmesh[1]}x{kmesh[2]} メッシュ固定で {len(strains)} 体積点")
 
     for index, (strain, scaled) in enumerate(zip(strains, eos_points(strains, structure))):
         point_dir = workdir / f"eos_{index:02d}"
@@ -381,12 +379,12 @@ def run_eos(entry: BenchEntry, config, structure, workdir: Path,
             log(f"    eos {strain:+.0%}: {exc}")
             continue
         if not result.ok or result.energy is None:
-            log(f"    eos {strain:+.0%}: scf did not finish")
+            log(f"    eos {strain:+.0%}: scf が完了しませんでした")
             continue
         volumes.append(float(scaled.volume))
         energies.append(float(result.energy))
-        # only the energy is needed from an EOS point; the wavefunctions and the
-        # charge density of five extra scf runs per system add up to gigabytes
+        # EOS の各点から必要なのはエネルギーだけ。1 系あたり 5 回分の追加 scf の
+        # 波動関数と電荷密度を残すと、合計で数 GB になってしまう
         if not config.get("output.keep_wavefunctions", False):
             shutil.rmtree(point_dir / "tmp", ignore_errors=True)
 
@@ -396,13 +394,13 @@ def run_eos(entry: BenchEntry, config, structure, workdir: Path,
     if fit:
         payload["v0_per_atom"] = fit["v0"] / max(1, len(structure))
         log(f"    EOS: V0 = {fit['v0']:.3f} A^3, B0 = {fit['b0']:.1f} GPa "
-            f"({len(volumes)} points)")
+            f"({len(volumes)} 点)")
     return payload
 
 
 def run_entry(entry: BenchEntry, base_config, root: Path, eos: bool = True,
               strains: Sequence[float] = DEFAULT_STRAINS, log=print) -> dict:
-    """Run one benchmark entry and collect every compared quantity."""
+    """ベンチマーク 1 エントリを実行し、比較対象の物理量をすべて集める。"""
     from ezcal.workflows import Workflow
 
     started = time.time()
@@ -478,7 +476,7 @@ def run_entry(entry: BenchEntry, base_config, root: Path, eos: bool = True,
 def run_suite(entries: Iterable[BenchEntry], base_config, root: str | Path,
               eos: bool = True, resume: bool = True,
               strains: Sequence[float] = DEFAULT_STRAINS, log=print) -> list[dict]:
-    """Run every entry, writing results as they finish so a run can be resumed."""
+    """全エントリを実行する。終わった順に結果を書き出すため、中断後の再開ができる。"""
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
     entries = list(entries)
@@ -489,14 +487,14 @@ def run_suite(entries: Iterable[BenchEntry], base_config, root: str | Path,
         if resume and cached.is_file():
             previous = json.loads(cached.read_text(encoding="utf-8"))
             if previous.get("ok"):
-                log(f"[{index}/{len(entries)}] {entry.name}: already done, skipping")
+                log(f"[{index}/{len(entries)}] {entry.name}: 実行済みのためスキップします")
                 records.append(previous)
                 continue
-            log(f"[{index}/{len(entries)}] {entry.name}: previous run failed, retrying")
+            log(f"[{index}/{len(entries)}] {entry.name}: 前回失敗したため再実行します")
         log(f"[{index}/{len(entries)}] {entry.name} ({entry.formula}, {entry.prototype})")
         record = run_entry(entry, base_config, root, eos=eos, strains=strains, log=log)
-        status = "ok" if record.get("ok") else f"FAILED ({record.get('error', 'see log')})"
-        log(f"    {status}, {record.get('elapsed_s', 0):.0f} s")
+        status = "成功" if record.get("ok") else f"失敗 ({record.get('error', 'ログを参照')})"
+        log(f"    {status}, {record.get('elapsed_s', 0):.0f} 秒")
         records.append(record)
         _write_results(root, records)
     return records
@@ -509,10 +507,10 @@ def _write_results(root: Path, records: Sequence[dict]) -> Path:
 
 
 def load_results(root: str | Path, refresh: bool = True) -> list[dict]:
-    """Load per-entry results, re-deriving the structural metrics.
+    """エントリごとの結果を読み込み、構造由来の指標を再計算する。
 
-    Only the Quantum ESPRESSO part is expensive; the symmetry analysis is
-    redone on load so a fix there does not mean re-running the suite.
+    重いのは Quantum ESPRESSO の部分だけなので、対称性解析は読み込み時にやり直す。
+    こうしておけば、そこを修正してもベンチマーク全体を再実行せずに済む。
     """
     root = Path(root)
     records = [json.loads(p.read_text(encoding="utf-8"))
@@ -522,7 +520,7 @@ def load_results(root: str | Path, refresh: bool = True) -> list[dict]:
         if combined.is_file():
             records = json.loads(combined.read_text(encoding="utf-8"))
     if not records:
-        raise BenchmarkError(f"no benchmark results under {root}")
+        raise BenchmarkError(f"{root} にベンチマーク結果がありません")
     if refresh:
         for record in records:
             _refresh_structure_metrics(record)
@@ -545,22 +543,22 @@ def _refresh_structure_metrics(record: dict) -> None:
         record[key] = structure_metrics(structure, record.get("prototype"))
 
 
-# ------------------------------------------------- Materials Project lookup
+# --------------------------------------------- Materials Project の照会
 MP_FIELDS = ("material_id", "formula_pretty", "symmetry", "structure", "band_gap",
              "is_gap_direct", "volume", "density", "nsites", "total_magnetization",
              "energy_above_hull", "formation_energy_per_atom", "theoretical")
 
 
 def fetch_mp(records: Sequence[dict], api_key: str, log=print) -> dict[str, dict]:
-    """Look Materials Project entries up by formula, matched on space group.
+    """組成式で Materials Project を検索し、空間群で絞り込む。
 
-    Matching by formula + symmetry rather than by a hard-coded material id
-    keeps the suite honest when MP re-indexes.
+    material id を直接書き込むのではなく組成式 + 対称性で照合することで、MP 側の
+    再インデックスがあってもベンチマークが破綻しないようにしている。
     """
     try:
         from mp_api.client import MPRester
     except ImportError as exc:                                  # pragma: no cover
-        raise BenchmarkError("mp-api is not installed: uv pip install mp-api") from exc
+        raise BenchmarkError("mp-api がインストールされていません: uv pip install mp-api") from exc
 
     out: dict[str, dict] = {}
     with MPRester(api_key) as mpr:
@@ -570,7 +568,7 @@ def fetch_mp(records: Sequence[dict], api_key: str, log=print) -> dict[str, dict
             try:
                 docs = mpr.materials.summary.search(formula=formula, fields=list(MP_FIELDS))
             except Exception as exc:
-                log(f"    MP lookup failed for {formula}: {exc}")
+                log(f"    {formula} の MP 検索に失敗しました: {exc}")
                 continue
             if not docs:
                 continue
@@ -599,7 +597,7 @@ def fetch_mp(records: Sequence[dict], api_key: str, log=print) -> dict[str, dict
             out[record["name"]] = entry
             matched = entry["spacegroup"] == entry.get("spacegroup_wanted")
             log(f"    MP {formula}: {entry['material_id']} "
-                f"({entry['spacegroup']}" + ("" if matched else " - different phase") + ")")
+                f"({entry['spacegroup']}" + ("" if matched else " - 別の相") + ")")
     return out
 
 
@@ -610,17 +608,17 @@ def _as_float(value):
         return None
 
 
-# --------------------------------------------------------------- comparison
-#: what is compared, where the calculated value lives, and where the reference does
+# ------------------------------------------------------------------ 比較処理
+#: 比較する量、計算値の格納場所、参照値の対応
 COMPARISONS: tuple[tuple[str, str, str, str], ...] = (
-    ("a", "lattice a", "A", "relaxed.a"),
-    ("c", "lattice c", "A", "relaxed.c"),
+    ("a", "格子定数 a", "A", "relaxed.a"),
+    ("c", "格子定数 c", "A", "relaxed.c"),
     ("c_over_a", "c/a", "", "relaxed.c_over_a"),
-    ("volume_per_atom", "volume per atom", "A^3", "relaxed.volume_per_atom"),
-    ("density", "density", "g/cm^3", "relaxed.density"),
-    ("b0", "bulk modulus", "GPa", "eos.b0"),
-    ("gap", "band gap", "eV", "band_gap"),
-    ("magmom", "magnetic moment", "uB/atom", "site_moment"),
+    ("volume_per_atom", "原子あたり体積", "A^3", "relaxed.volume_per_atom"),
+    ("density", "密度", "g/cm^3", "relaxed.density"),
+    ("b0", "体積弾性率", "GPa", "eos.b0"),
+    ("gap", "バンドギャップ", "eV", "band_gap"),
+    ("magmom", "磁気モーメント", "uB/atom", "site_moment"),
 )
 
 
@@ -642,17 +640,17 @@ def _calc_value(record: Mapping[str, Any], key: str, path: str):
 
 
 def compare(records: Sequence[dict], mp_data: Mapping[str, dict] | None = None) -> list[dict]:
-    """One row per (system, quantity) with calculated / experimental / MP values."""
+    """(系, 物理量) ごとに 1 行を作り、計算値・実験値・MP 値を並べる。"""
     rows: list[dict] = []
     for record in records:
         reference = record.get("reference") or {}
         mp_entry = (mp_data or {}).get(record["name"]) or {}
-        # the phase MP settled on is not always the prototype we asked for
-        # (BaTiO3 relaxes tetragonal, rutile relaxes to Imma, ...)
+        # MP が採用した相が、こちらの指定したプロトタイプと一致するとは限らない
+        # (BaTiO3 は正方晶に、ルチルは Imma に緩和する、など)
         same_phase = bool(mp_entry) and (
             mp_entry.get("spacegroup") == (record.get("initial") or {}).get("spacegroup"))
         for key, label, unit, path in COMPARISONS:
-            # c and c/a are only meaningful for the non-cubic prototypes
+            # c と c/a は非立方晶プロトタイプでのみ意味を持つ
             if key in {"c", "c_over_a"} and reference.get("c") is None:
                 continue
             calc = _calc_value(record, key, path)
@@ -668,10 +666,10 @@ def compare(records: Sequence[dict], mp_data: Mapping[str, dict] | None = None) 
                 "mp_spacegroup": mp_entry.get("spacegroup"),
                 "mp_same_phase": same_phase if mp_entry else None,
             }
-            # a, c and c/a of a different phase are not the same quantity
+            # 相が異なる場合、その a・c・c/a は同じ物理量とは言えない
             if key in {"a", "c", "c_over_a"} and mp_value is not None and not same_phase:
                 row["mp"] = None
-                row["mp_excluded"] = "MP settled on a different phase"
+                row["mp_excluded"] = "MP は別の相に緩和している"
                 mp_value = None
             for other in ("exp", "mp"):
                 value = row[other]
@@ -682,7 +680,7 @@ def compare(records: Sequence[dict], mp_data: Mapping[str, dict] | None = None) 
     return rows
 
 
-#: quantity -> field in the Materials Project record (None: MP has no counterpart)
+#: 物理量 -> Materials Project レコード上の項目 (None は MP に対応値なし)
 MP_FIELD_OF = {"a": "a", "c": "c", "c_over_a": "c_over_a",
                "volume_per_atom": "volume_per_atom", "density": "density",
                "gap": "band_gap", "b0": None, "magmom": None}
@@ -694,7 +692,7 @@ def _mp_key(mp_entry: Mapping[str, Any], key: str):
 
 
 def summarise(rows: Sequence[dict], against: str = "exp") -> list[dict]:
-    """Mean absolute (relative) error per quantity."""
+    """物理量ごとの平均誤差・平均絶対誤差 (および相対値)。"""
     out: list[dict] = []
     for key, label, unit, _ in COMPARISONS:
         for group in (*GROUPS, "all"):
@@ -716,10 +714,10 @@ def summarise(rows: Sequence[dict], against: str = "exp") -> list[dict]:
     return out
 
 
-# ------------------------------------------------------------------ report
+# -------------------------------------------------------------- レポート出力
 def write_report(records: Sequence[dict], rows: Sequence[dict], root: str | Path,
                  backends: Sequence[str] = ("matplotlib",), dpi: int = 200) -> dict:
-    """Markdown + CSV + parity plots for a finished benchmark run."""
+    """完了したベンチマークについて Markdown・CSV・パリティプロットを書き出す。"""
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
     files: dict[str, str] = {}
@@ -734,13 +732,13 @@ def write_report(records: Sequence[dict], rows: Sequence[dict], root: str | Path
             fh.write(",".join(_csv(row.get(c)) for c in columns) + "\n")
     files["csv"] = str(csv_path)
 
-    # ---- plots -----------------------------------------------------------
+    # ---- 図 ---------------------------------------------------------------
     plots: list[Path] = []
     for against in ("exp", "mp"):
         plots += parity_plots(rows, root / "plots", backends, dpi, against=against)
     files["plots"] = [str(p) for p in plots]
 
-    # ---- markdown --------------------------------------------------------
+    # ---- Markdown ---------------------------------------------------------
     text = render_markdown(records, rows)
     report_path = root / "bench_report.md"
     report_path.write_text(text, encoding="utf-8")
@@ -766,14 +764,14 @@ def _csv(value) -> str:
     return f'"{text}"' if "," in text else text
 
 
-#: what each reference column is called on a plot
-REFERENCE_LABEL = {"exp": ("experiment", "parity_vs_experiment"),
+#: 図の上で各参照値をどう呼ぶか
+REFERENCE_LABEL = {"exp": ("実験値", "parity_vs_experiment"),
                    "mp": ("Materials Project", "parity_vs_mp")}
 
 
 def parity_plots(rows: Sequence[dict], outdir: Path, backends: Sequence[str],
                  dpi: int = 200, against: str = "exp") -> list[Path]:
-    """Calculated vs reference scatter, one panel per compared quantity."""
+    """計算値と参照値の散布図。比較する物理量ごとに 1 パネル描く。"""
     from ezcal.plotting import resolve_backends
 
     backends = resolve_backends(list(backends))
@@ -824,7 +822,7 @@ def parity_plots(rows: Sequence[dict], outdir: Path, backends: Sequence[str],
         for axis in axes.flat[len(panels):]:
             axis.set_visible(False)
         axes.flat[0].legend(frameon=False, fontsize=9)
-        fig.suptitle(f"ezcal benchmark: calculated vs {reference_name}", fontsize=12)
+        fig.suptitle(f"ezcal ベンチマーク: 計算値 vs {reference_name}", fontsize=12)
         path = outdir / f"{stem}.png"
         fig.savefig(path, dpi=dpi)
         plt.close(fig)
@@ -862,7 +860,7 @@ def parity_plots(rows: Sequence[dict], outdir: Path, backends: Sequence[str],
                           row=row + 1, col=col + 1)
             fig.update_xaxes(title_text=unit or None, row=row + 1, col=col + 1)
         fig.update_layout(template="plotly_white", height=380 * nrows, width=380 * ncols,
-                          title=f"ezcal benchmark: calculated vs {reference_name}")
+                          title=f"ezcal ベンチマーク: 計算値 vs {reference_name}")
         path = outdir / f"{stem}.html"
         fig.write_html(path, include_plotlyjs="cdn")
         written.append(path)
@@ -877,18 +875,18 @@ def render_markdown(records: Sequence[dict], rows: Sequence[dict]) -> str:
     failed = [r for r in records if not r.get("ok")]
     total_time = sum(float(r.get("elapsed_s") or 0) for r in records)
 
-    lines = ["# ezcal benchmark report", "",
-             f"- systems: **{len(records)}**  (ok {len(ok)}, failed {len(failed)})",
-             f"- total wall time: {total_time / 60:.1f} min",
-             "- parity plots: `plots/parity_vs_experiment.png` and "
-             "`plots/parity_vs_mp.png` (plus interactive `.html`)", ""]
+    lines = ["# ezcal ベンチマークレポート", "",
+             f"- 系の数: **{len(records)}**  (成功 {len(ok)}、失敗 {len(failed)})",
+             f"- 合計実時間: {total_time / 60:.1f} 分",
+             "- パリティプロット: `plots/parity_vs_experiment.png` と "
+             "`plots/parity_vs_mp.png` (対話版の `.html` も出力)", ""]
 
-    for against, title in (("exp", "vs experiment"), ("mp", "vs Materials Project")):
+    for against, title in (("exp", "実験値との比較"), ("mp", "Materials Project との比較")):
         summary = summarise(rows, against)
         if not summary:
             continue
-        lines += [f"## Mean errors {title}", "",
-                  "| quantity | set | n | ME | MAE | MRE (%) | MARE (%) | max abs |",
+        lines += [f"## 平均誤差: {title}", "",
+                  "| 物理量 | セット | n | ME | MAE | MRE (%) | MARE (%) | 最大絶対誤差 |",
                   "|---|---|---|---|---|---|---|---|"]
         for entry in summary:
             lines.append(
@@ -902,8 +900,8 @@ def render_markdown(records: Sequence[dict], rows: Sequence[dict]) -> str:
         if not subset:
             continue
         lines += [f"## {group}", "",
-                  "| system | prototype | a calc | a exp | Δ% | V0/atom | B0 calc | B0 exp | "
-                  "gap calc | gap exp | m calc | m exp | t (s) |",
+                  "| 系 | プロトタイプ | a 計算 | a 実験 | Δ% | V0/原子 | B0 計算 | B0 実験 | "
+                  "ギャップ計算 | ギャップ実験 | m 計算 | m 実験 | 時間 (秒) |",
                   "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for record in subset:
             reference = record.get("reference") or {}
@@ -925,8 +923,8 @@ def render_markdown(records: Sequence[dict], rows: Sequence[dict]) -> str:
 
     metal_dos = [r for r in records if (r.get("dos_metrics") or {}).get("n_ef") is not None]
     if metal_dos:
-        lines += ["## Density of states at the Fermi level", "",
-                  "| system | N(E_F) (states/eV/cell) | per atom | d-band centre (eV) |",
+        lines += ["## フェルミ準位における状態密度", "",
+                  "| 系 | N(E_F) (states/eV/cell) | 原子あたり | d バンド中心 (eV) |",
                   "|---|---|---|---|"]
         for record in metal_dos:
             metrics = record["dos_metrics"]
@@ -938,35 +936,35 @@ def render_markdown(records: Sequence[dict], rows: Sequence[dict]) -> str:
     excluded = sorted({(r["name"], r.get("mp_id"), r.get("mp_spacegroup"))
                        for r in rows if r.get("mp_excluded")})
     if excluded:
-        lines += ["## Materials Project: different phase", "",
-                  "MP relaxed these to a different space group than the prototype asked "
-                  "for, so their a / c / (c/a) are not the same quantity and are left out "
-                  "of the MP averages.  Volume per atom, density and the band gap are "
-                  "still comparable.", "",
-                  "| system | MP id | MP space group |", "|---|---|---|"]
+        lines += ["## Materials Project: 相が異なるもの", "",
+                  "以下の系について、MP はこちらが指定したプロトタイプとは異なる空間群へ"
+                  "緩和している。そのため a / c / (c/a) は同じ物理量とは言えず、MP との"
+                  "平均誤差からは除外している。原子あたり体積・密度・バンドギャップは"
+                  "引き続き比較可能である。", "",
+                  "| 系 | MP id | MP の空間群 |", "|---|---|---|"]
         for name, mp_id, spacegroup in excluded:
             lines.append(f"| {name} | {mp_id} | {spacegroup} |")
         lines.append("")
 
-    lines += ["## Reading these numbers", "",
-              "- Lattice constants and bulk moduli are the check on the *structure*: "
-              "PBE overestimates lattice constants by about 1 % and gets bulk moduli "
-              "within roughly 10 %.  A large error here means something is wrong with "
-              "the pseudopotentials, the cutoffs or the k-point sampling.",
-              "- Band gaps are **expected** to come out far below experiment; that is "
-              "the known PBE behaviour, not a bug.  The Materials Project comparison is "
-              "the meaningful one for gaps, because MP is also PBE based.",
-              "- NiO / MnO / CoO are run antiferromagnetically but **without +U**, so "
-              "their gaps and moments are much too small.  Adding `--hubbard-u` fixes "
-              "that, at the cost of no longer being plain PBE.",
-              "- Cohesive and formation energies are not included: they need isolated "
-              "atom / O2 references and anion corrections, which is a different exercise "
-              "from checking that an installation is sane.", ""]
+    lines += ["## 数値の読み方", "",
+              "- 格子定数と体積弾性率は *構造* に対する検証である。PBE は格子定数を "
+              "1 % 程度過大評価し、体積弾性率はおよそ 10 % 以内に収まる。ここで大きな"
+              "誤差が出る場合は、擬ポテンシャル・カットオフ・k 点サンプリングの"
+              "どれかに問題がある。",
+              "- バンドギャップが実験値を大きく下回るのは **想定どおり** であり、"
+              "PBE の既知の性質であってバグではない。ギャップについて意味があるのは "
+              "Materials Project との比較のほうである (MP も PBE ベースのため)。",
+              "- NiO / MnO / CoO は反強磁性として計算しているが **+U を入れていない**。"
+              "そのためギャップも磁気モーメントも小さすぎる値になる。`--hubbard-u` を"
+              "加えれば改善するが、その代わり素の PBE ではなくなる。",
+              "- 凝集エネルギーと生成エネルギーは含めていない。孤立原子や O2 の参照計算と"
+              "陰イオン補正が必要であり、環境が正常かを確かめるという目的とは別の"
+              "作業になるためである。", ""]
 
     if failed:
-        lines += ["## Failures", ""]
+        lines += ["## 失敗した系", ""]
         for record in failed:
-            lines.append(f"- **{record['name']}**: {record.get('error') or 'see the run directory'}")
+            lines.append(f"- **{record['name']}**: {record.get('error') or '実行ディレクトリを参照'}")
             for message in (record.get("messages") or [])[-3:]:
                 lines.append(f"  - {message}")
         lines.append("")

@@ -1,15 +1,14 @@
-"""VASP engine.
+"""VASP エンジン。
 
-The engine drives whatever ``vasp.command`` points at.  That is normally a
-licensed ``vasp_std`` binary, but it can equally be ``mock-vasp`` from
-aiida-vasp: a stand-in that hashes the parsed INCAR/KPOINTS/POSCAR of the
-working directory, looks the hash up in a registry of finished
-calculations, and copies the recorded outputs back.  That makes the whole
-VASP path - input generation, execution, parsing, plotting - testable
-without a VASP licence, and lets a group replay reference calculations.
+``vasp.command`` が指すものを実行する。通常はライセンス済みの ``vasp_std``
+バイナリだが、aiida-vasp の ``mock-vasp`` でも構わない。後者は代役であり、
+作業ディレクトリの INCAR/KPOINTS/POSCAR を解析してハッシュを取り、完了済み計算の
+レジストリから該当するものを探して、記録済みの出力を書き戻す。これにより VASP 経路
+全体 (入力生成・実行・解析・作図) を、ライセンス無しで検証できるようになり、
+研究室内で参照計算を再生することもできる。
 
-Provenance is never hidden: a result that came out of the mock carries
-``data["mock"]`` and says so in the run report.
+出所は隠さない。モック由来の結果には ``data["mock"]`` が付き、実行レポートにも
+その旨が明記される。
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ RY_EV = 13.605693122994
 BOHR_ANG = 0.529177210903
 KBAR_GPA = 0.1
 
-#: how ezcal's engine-independent options map onto INCAR tags (all tasks)
+#: ezcal のエンジン非依存オプションと INCAR タグの対応 (全タスク共通)
 INCAR_MAP: dict[str, tuple[str, Any]] = {
     "dft.ecutwfc": ("ENCUT", lambda ry: round(float(ry) * RY_EV, 1)),        # Ry -> eV
     "dft.conv_thr": ("EDIFF", lambda v: float(v) * RY_EV),                   # Ry -> eV
@@ -37,18 +36,18 @@ INCAR_MAP: dict[str, tuple[str, Any]] = {
     "dft.electron_maxstep": ("NELM", int),
 }
 
-#: mapped only for the tasks that move atoms
+#: 原子を動かすタスクでのみ対応付けるもの
 RELAX_INCAR_MAP: dict[str, tuple[str, Any]] = {
     "relax.nstep": ("NSW", int),
-    # Ry/Bohr -> eV/Angstrom, negative because VASP reads it as a force criterion
+    # Ry/Bohr -> eV/Angstrom。VASP は負値を力の収束条件として解釈するため符号を反転
     "relax.forc_conv_thr": ("EDIFFG", lambda v: -abs(float(v) * RY_EV / BOHR_ANG)),
 }
 
-#: VASP's own sensible starting point, used when the ezcal option was left at
-#: its packaged (Quantum ESPRESSO flavoured) default
+#: ezcal 側のオプションが同梱の既定値 (Quantum ESPRESSO 寄りの値) のままだった
+#: 場合に使う、VASP にとって妥当な出発点
 VASP_DEFAULTS: dict[str, Any] = {"EDIFF": 1.0e-6}
 
-#: ezcal task -> the INCAR settings that define it
+#: ezcal のタスク -> そのタスクを規定する INCAR 設定
 TASK_INCAR: dict[str, dict[str, Any]] = {
     "scf": {"IBRION": -1, "NSW": 0, "ISIF": 2, "LCHARG": True, "LWAVE": True},
     "relax": {"IBRION": 2, "NSW": 100, "ISIF": 2, "LCHARG": True},
@@ -58,7 +57,7 @@ TASK_INCAR: dict[str, dict[str, Any]] = {
     "dos": {"IBRION": -1, "NSW": 0, "ICHARG": 11, "ISMEAR": -5, "LORBIT": 11},
 }
 
-#: occupation scheme -> ISMEAR
+#: 占有数の方式 -> ISMEAR
 ISMEAR = {"smearing": 1, "gaussian": 0, "mv": 1, "mp": 1, "fd": -1,
           "fixed": 0, "tetrahedra": -5}
 
@@ -67,32 +66,33 @@ _MOCK_CASE_RE = re.compile(r"Using test data from folder: (\S+)")
 _MOCK_DEFAULT = "Using default test data"
 
 PLACEHOLDER_POTCAR = """\
-This is NOT a VASP pseudopotential.
+これは VASP の擬ポテンシャルではありません。
 
-ezcal wrote this placeholder because the configured VASP command is a mock
-({command}) which only checks that the file exists.  A real VASP run needs a
-licensed POTCAR library; point qe_config.yaml at it with
+設定された VASP コマンドがモック ({command}) であり、ファイルの存在確認しか
+行わないため、ezcal がこのダミーファイルを書き出しました。実際の VASP 計算には
+ライセンス済みの POTCAR ライブラリが必要です。qe_config.yaml で次のように
+指定してください。
 
     vasp:
       potcar_dir: /path/to/potpaw_PBE
       potcar_mode: library
 
-Elements in this calculation, in POSCAR order: {elements}
+この計算に含まれる元素 (POSCAR の順): {elements}
 """
 
 
 class VaspEngine(Engine):
-    """Run VASP (or aiida-vasp's ``mock-vasp``) and parse ``vasprun.xml``."""
+    """VASP (または aiida-vasp の ``mock-vasp``) を実行し、``vasprun.xml`` を解析する。"""
 
     name = "vasp"
     supported = ("scf", "relax", "vc-relax", "nscf", "bands", "dos", "pdos")
 
-    # ------------------------------------------------------------ command
+    # ------------------------------------------------------------ コマンド
     def command(self) -> str:
         return str(self.config.get("vasp.command", "vasp_std"))
 
     def is_mock(self) -> bool:
-        """True when the configured command is aiida-vasp's mock executable."""
+        """設定されたコマンドが aiida-vasp のモック実行ファイルなら True。"""
         return Path(self.command()).name.startswith("mock-vasp")
 
     def check(self) -> list[str]:
@@ -102,24 +102,24 @@ class VaspEngine(Engine):
         problems: list[str] = []
         if shutil.which(command) is None and not Path(command).is_file():
             problems.append(
-                f"VASP command {command!r} not found - set vasp.command in qe_config.yaml "
-                "(use 'mock-vasp' from aiida-vasp to exercise the VASP path without a licence)"
+                f"VASP コマンド {command!r} が見つかりません。qe_config.yaml の vasp.command を"
+                "設定してください (ライセンス無しで VASP 経路を試すなら aiida-vasp の "
+                "'mock-vasp' が使えます)"
             )
         if self.is_mock() and not self.config.get("vasp.mock.registry"):
             problems.append(
-                "vasp.command is a mock but vasp.mock.registry is not set, so there is "
-                "nothing to replay - point it at a registry directory"
+                "vasp.command がモックですが vasp.mock.registry が未設定のため、再生できる"
+                "ものがありません。レジストリのディレクトリを指定してください"
             )
         return problems
 
     # ---------------------------------------------------------- INCAR
     def incar(self, structure, task: str) -> dict[str, Any]:
-        """Assemble the INCAR tags for one task.
+        """1 タスク分の INCAR タグを組み立てる。
 
-        ``vasp.incar`` overrides individual tags (a ``null`` value removes
-        one); with ``vasp.incar_mode: replace`` it becomes the whole INCAR,
-        which is what you want when reproducing a recorded calculation
-        byte-for-byte.
+        ``vasp.incar`` は個々のタグを上書きする (値が ``null`` なら削除)。
+        ``vasp.incar_mode: replace`` にすると、それ自体が INCAR 全体になる。
+        記録済み計算をバイト単位で再現したい場合はこちらを使う。
         """
         overrides = dict(self.config.get("vasp.incar", {}) or {})
         if str(self.config.get("vasp.incar_mode", "merge")).lower() == "replace":
@@ -134,13 +134,13 @@ class VaspEngine(Engine):
             maps.update(RELAX_INCAR_MAP)
         for dotted, (tag, convert) in maps.items():
             value = cfg.get(dotted)
-            # an untouched QE-flavoured default must not leak into VASP: conv_thr
-            # 1e-8 Ry would become an EDIFF of 1.4e-7 eV, which is absurd here
+            # 手つかずの QE 寄りの既定値を VASP に持ち込んではいけない。conv_thr の
+            # 1e-8 Ry は EDIFF 1.4e-7 eV に相当し、VASP では非現実的な値になる
             if value is None or (tag in VASP_DEFAULTS and not _is_user_set(dotted, value)):
                 continue
             tags[tag] = convert(value)
 
-        # the task defines the run type, so it wins over the generic mapping
+        # 計算の種類を決めるのはタスクなので、汎用の対応付けより優先させる
         tags.update(TASK_INCAR.get(task, {}))
 
         if task in {"scf", "relax", "vc-relax"}:
@@ -153,12 +153,10 @@ class VaspEngine(Engine):
 
             tags["ISPIN"] = 2
             magmoms = cfg.get("dft.starting_magnetization", {}) or {}
-            # VASP wants one starting moment per site, in POSCAR order and in Bohr
-            # magneton.  QE reads the same option as a fraction of the valence
-            # charge, so ezcal passes the number through unchanged rather than
-            # inventing a conversion: what matters across both codes is the sign
-            # pattern that sets up the magnetic order.  Sites left unspecified get
-            # VASP's own default of 1.0.
+            # VASP はサイトごとの初期モーメントを、POSCAR の順にボーア磁子単位で要求する。
+            # QE は同じオプションを価電子数に対する割合として読むが、ezcal は独自の換算を
+            # 作らず値をそのまま渡す。両コードで本質的に重要なのは、磁気秩序を決める符号の
+            # パターンだからである。指定のないサイトには VASP 既定の 1.0 が入る。
             default = float(cfg.get("vasp.magmom_default", 1.0) or 1.0)
             per_site = []
             for label in site_labels(structure):
@@ -192,7 +190,7 @@ class VaspEngine(Engine):
                 tags[key] = value
         return tags
 
-    # ---------------------------------------------------------- inputs
+    # ---------------------------------------------------------- 入力生成
     def write_inputs(self, structure, task: str, workdir: Path,
                      kmesh: Sequence[int] | None = None, kpath=None) -> Path:
         from pymatgen.io.vasp.inputs import Poscar
@@ -201,9 +199,9 @@ class VaspEngine(Engine):
         workdir.mkdir(parents=True, exist_ok=True)
 
         Poscar(structure).write_file(str(workdir / "POSCAR"))
-        # INCAR and KPOINTS are written here rather than through pymatgen so that
-        # integers stay integers and the shift line is always present: mock-vasp
-        # hashes the *parsed* input, and 200 and 200.0 are not the same value
+        # INCAR と KPOINTS は pymatgen 経由ではなくここで書き出す。整数を整数のまま保ち、
+        # シフト行を必ず含めるため。mock-vasp は *解析後* の入力をハッシュ化するので、
+        # 200 と 200.0 は別物として扱われてしまう
         (workdir / "INCAR").write_text(render_incar(self.incar(structure, task)),
                                        encoding="utf-8")
         if kpath is not None:
@@ -220,7 +218,7 @@ class VaspEngine(Engine):
         return workdir
 
     def write_potcar(self, structure, workdir: Path) -> Path:
-        """Write POTCAR from a licensed library, or a labelled placeholder."""
+        """ライセンス済みライブラリから POTCAR を書き出す。無ければ明示的なダミーを置く。"""
         symbols = _poscar_species(structure)
         mode = str(self.config.get("vasp.potcar_mode", "auto")).lower()
         potcar_dir = self.config.path("vasp.potcar_dir")
@@ -231,7 +229,7 @@ class VaspEngine(Engine):
 
         if mode == "library":
             if not potcar_dir:
-                raise EngineError("vasp.potcar_mode is 'library' but vasp.potcar_dir is not set")
+                raise EngineError("vasp.potcar_mode が 'library' ですが vasp.potcar_dir が未設定です")
             from pymatgen.io.vasp.inputs import Potcar
 
             mapping = self.config.get("vasp.potcar_map", {}) or {}
@@ -249,16 +247,17 @@ class VaspEngine(Engine):
             return target
 
         raise EngineError(
-            "no POTCAR available: set vasp.potcar_dir to a licensed library, or use a mock "
-            "command (vasp.command: mock-vasp) which does not need one"
+            "利用できる POTCAR がありません。vasp.potcar_dir にライセンス済みライブラリを"
+            "指定するか、POTCAR を必要としないモックコマンド (vasp.command: mock-vasp) を"
+            "使ってください"
         )
 
-    # ---------------------------------------------------------- execution
+    # ---------------------------------------------------------- 実行
     def registry_path(self) -> Path | None:
-        """The mock registry directory, or None.
+        """モックレジストリのディレクトリ。無ければ None。
 
-        mock-vasp 5.1 takes a single base path (it calls ``Path()`` on whatever
-        ``MOCK_VASP_REG_BASE`` holds), so a list in the config uses its first entry.
+        mock-vasp 5.1 は単一のベースパスしか受け付けない (``MOCK_VASP_REG_BASE`` の
+        中身に対して ``Path()`` を呼ぶ) ため、設定がリストの場合は先頭要素を使う。
         """
         registry = self.config.get("vasp.mock.registry")
         if not registry:
@@ -268,7 +267,7 @@ class VaspEngine(Engine):
         return Path(os.path.expandvars(str(registry))).expanduser().resolve()
 
     def stage_env(self) -> dict[str, str]:
-        """Environment for the mock code, empty for a real VASP run."""
+        """モック用の環境変数。実 VASP の場合は空。"""
         env: dict[str, str] = {}
         registry = self.registry_path()
         if registry:
@@ -282,7 +281,7 @@ class VaspEngine(Engine):
             **kwargs) -> CalcResult:
         task = task.lower()
         if not self.supports(task):
-            raise EngineError(f"the VASP engine cannot run task {task!r}")
+            raise EngineError(f"VASP エンジンはタスク {task!r} を実行できません")
         workdir = Path(workdir)
         workdir.mkdir(parents=True, exist_ok=True)
 
@@ -298,7 +297,7 @@ class VaspEngine(Engine):
             )
         self.write_inputs(structure, task, workdir, kmesh=kwargs.get("kmesh"), kpath=kpath)
 
-        # a band/dos run reads the charge density of the previous scf
+        # bands/dos の計算は直前の scf の電荷密度を読む
         if task in {"nscf", "bands", "dos"} and prev is not None:
             _link_chgcar(Path(prev.workdir), workdir)
 
@@ -323,19 +322,19 @@ class VaspEngine(Engine):
         if job.submitted_only:
             result.ok = True
             result.messages.append(
-                f"submitted as {job.job_id}" if job.job_id
-                else "dry run: VASP inputs written, nothing executed")
+                f"ジョブ {job.job_id} として投入しました" if job.job_id
+                else "ドライラン: VASP の入力を書き出しました (実行はしていません)")
             return result
         if not job.ok:
             result.messages += job.log[-2:]
-            result.messages.append(f"VASP failed (exit code {job.returncode}); see {workdir}")
+            result.messages.append(f"VASP が失敗しました (終了コード {job.returncode})。{workdir} を確認してください")
             return result
 
         self._note_mock(result, workdir)
         self._parse(result, workdir, structure, kpath)
         return result
 
-    # ---------------------------------------------------------- provenance
+    # ---------------------------------------------------------- 出所の記録
     def _note_mock(self, result: CalcResult, workdir: Path) -> None:
         if not self.is_mock():
             return
@@ -348,34 +347,34 @@ class VaspEngine(Engine):
         if match:
             info.update(mode="registry", source=match.group(1))
             result.messages.append(
-                f"mock-vasp replayed recorded VASP output from {match.group(1)} "
-                "(the inputs hash-matched that entry)")
+                f"mock-vasp が {match.group(1)} に記録された VASP 出力を再生しました "
+                "(入力のハッシュがそのエントリと一致)")
         elif case:
             info.update(mode="test-case", source=case.group(1))
-            result.messages.append(f"mock-vasp used the bundled test case {case.group(1)!r}")
+            result.messages.append(f"mock-vasp が同梱のテストケース {case.group(1)!r} を使用しました")
         elif _MOCK_DEFAULT in text:
             info.update(mode="default", source=None)
             result.messages.append(
-                "WARNING: mock-vasp fell back to its built-in demo data, which describes a "
-                "DIFFERENT system - these numbers are not a calculation of your structure")
+                "警告: mock-vasp が内蔵のデモデータにフォールバックしました。これは"
+                "別の系のデータであり、指定した構造の計算結果ではありません")
         else:
             info.update(mode="unknown", source=None)
-            result.messages.append("mock-vasp was used; provenance could not be determined")
+            result.messages.append("mock-vasp が使われましたが、出所を特定できませんでした")
         result.data["mock"] = info
 
-    # ---------------------------------------------------------- parsing
+    # ---------------------------------------------------------- 出力の解析
     def _parse(self, result: CalcResult, workdir: Path, structure, kpath) -> None:
         from pymatgen.io.vasp.outputs import Vasprun
 
         xml = workdir / "vasprun.xml"
         if not xml.is_file():
-            result.messages.append(f"vasprun.xml not found in {workdir}")
+            result.messages.append(f"{workdir} に vasprun.xml がありません")
             return
         try:
-            # the DOS block also carries efermi, so it is always worth reading
+            # DOS のブロックには efermi も含まれるので、常に読む価値がある
             run = Vasprun(str(xml), parse_potcar_file=False, parse_dos=True, parse_eigen=True)
-        except Exception as exc:                       # malformed / truncated run
-            result.messages.append(f"could not parse vasprun.xml: {exc}")
+        except Exception as exc:                       # 壊れている、または途中で切れた出力
+            result.messages.append(f"vasprun.xml を解析できませんでした: {exc}")
             return
 
         result.files["vasprun"] = str(xml)
@@ -407,7 +406,7 @@ class VaspEngine(Engine):
 
         self._parse_magnetism(result, workdir, run)
         self._parse_eigenvalues(result, run, kpath)
-        # unlike QE, VASP writes the DOS into vasprun.xml for every run that has one
+        # QE と違い、VASP は DOS を持つ計算なら必ず vasprun.xml に DOS を書き出す
         self._parse_dos(result, run)
 
     def _parse_magnetism(self, result: CalcResult, workdir: Path, run) -> None:
@@ -496,21 +495,21 @@ class VaspEngine(Engine):
                                    "per_element": per_element, "per_orbital": per_orbital,
                                    "total": payload["dos"]}
 
-    # ------------------------------------------------------------ registry
+    # ------------------------------------------------------------ レジストリ
     def record(self, rundir: Path, name: str) -> Path:
-        """Add a finished VASP run to the mock registry so it can be replayed."""
+        """完了済みの VASP 計算をモックレジストリに追加し、再生できるようにする。"""
         from aiida_vasp.utils.mock_code import VaspMockRegistry
 
         base = self.registry_path()
         if base is None:
-            raise EngineError("vasp.mock.registry is not set")
+            raise EngineError("vasp.mock.registry が設定されていません")
         base.mkdir(parents=True, exist_ok=True)
 
         rundir = Path(rundir)
         missing = [f for f in ("INCAR", "POSCAR", "KPOINTS", "vasprun.xml")
                    if not (rundir / f).is_file()]
         if missing:
-            raise EngineError(f"{rundir} is not a finished VASP run (missing {', '.join(missing)})")
+            raise EngineError(f"{rundir} は完了した VASP 計算ではありません (不足: {', '.join(missing)})")
 
         reg = VaspMockRegistry(str(base))
         reg.upload_calc(rundir, name)
@@ -518,7 +517,7 @@ class VaspEngine(Engine):
 
 
 def _is_user_set(dotted: str, value: Any) -> bool:
-    """True when ``value`` differs from the value shipped in default_config.yaml."""
+    """``value`` が default_config.yaml の同梱値と異なる場合に True。"""
     from ezcal.config import default_config
 
     try:
@@ -528,9 +527,9 @@ def _is_user_set(dotted: str, value: Any) -> bool:
     return shipped != value
 
 
-# ------------------------------------------------------------- input writers
+# ---------------------------------------------------------------- 入力の書式化
 def incar_value(value: Any) -> str:
-    """Render one INCAR value, keeping ints as ints and bools Fortran-style."""
+    """INCAR の値を 1 つ書式化する。整数は整数のまま、真偽値は Fortran 流に出力する。"""
     if isinstance(value, bool):
         return ".TRUE." if value else ".FALSE."
     if isinstance(value, (list, tuple, np.ndarray)):
@@ -566,9 +565,9 @@ def render_kpoints_explicit(points: np.ndarray, weight: float = 1.0) -> str:
     return "\n".join(lines) + "\n"
 
 
-# ------------------------------------------------------------------ helpers
+# ------------------------------------------------------------------ 補助関数
 def _poscar_species(structure) -> list[str]:
-    """Element symbols in POSCAR order, deduplicated the way VASP groups them."""
+    """POSCAR の順に並べた元素記号。VASP のグループ化に合わせて重複を除く。"""
     from pymatgen.io.vasp.inputs import Poscar
 
     return [str(s) for s in Poscar(structure).site_symbols]
@@ -592,7 +591,7 @@ def _sum_spins(densities) -> np.ndarray:
 
 
 def _link_chgcar(source: Path, target: Path) -> None:
-    """Carry CHGCAR/WAVECAR from the previous step into this one."""
+    """直前のステップの CHGCAR/WAVECAR を今回のステップへ引き継ぐ。"""
     import shutil
 
     for name in ("CHGCAR", "WAVECAR"):
@@ -606,13 +605,13 @@ def _link_chgcar(source: Path, target: Path) -> None:
 
 def _band_gap(eig: np.ndarray, occ: np.ndarray, fermi: float | None,
               tol: float = 1e-3) -> dict | None:
-    """Same electron-counting rule as the QE engine, on VASP occupations."""
+    """QE エンジンと同じ電子数の数え方を、VASP の占有数に対して適用する。"""
     nspin, nkpt, nbnd = eig.shape
     filled = occ > 0.5
     if not filled.any() or filled.all():
         return None
     counts = {int(filled[s, k].sum()) for s in range(nspin) for k in range(nkpt)}
-    if len(counts) != 1:                                # a band crosses E_F
+    if len(counts) != 1:                                # バンドが E_F を横切っている
         return {"gap": 0.0, "metal": True, "vbm": None, "cbm": None, "direct": None}
     nocc = counts.pop()
     if nocc < 1 or nocc >= nbnd:

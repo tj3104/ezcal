@@ -1,18 +1,18 @@
-"""Calculation engines.
+"""計算エンジン群。
 
-Three are shipped:
+標準で 3 種類を同梱している:
 
 ``qe``
-    Quantum ESPRESSO (``pw.x``, ``dos.x``, ``projwfc.x``).
+    Quantum ESPRESSO (``pw.x``、``dos.x``、``projwfc.x``)。
 ``vasp``
-    VASP, or aiida-vasp's ``mock-vasp`` which replays recorded runs so the
-    VASP path works without a licence.
+    VASP、または aiida-vasp の ``mock-vasp``。後者は記録済みの計算を再生するため、
+    ライセンスが無い環境でも VASP 経路を動かせる。
 ``mlip``
-    A machine-learning potential through ASE (SevenNet by default).
+    ASE 経由の機械学習ポテンシャル (既定は SevenNet)。
 
-Adding a new code means writing one module that subclasses
-:class:`ezcal.engines.base.Engine` and registering it below - the CLI, the
-configuration layer and the workflows do not change.
+新しいコードを追加する場合は :class:`ezcal.engines.base.Engine` を継承した
+モジュールを 1 つ書き、下記に登録するだけでよい。CLI・設定層・ワークフローは
+変更する必要がない。
 """
 
 from __future__ import annotations

@@ -1,70 +1,84 @@
 # ------------------------------------------------------------------
-# ezcal default configuration  (qe_config.yaml)
-# Copy it with `ezcal config init` and edit whatever you need.
-# Every key here can also be overridden on the command line, either by a
-# dedicated option (--ecutwfc 60) or generically (--set dft.mixing_beta=0.2).
+# ezcal 既定設定ファイル  (qe_config.yaml)
+# `ezcal config init` でコピーし、必要な箇所だけ編集してください。
+# ここにあるキーはすべてコマンドラインからも上書きできます。専用オプション
+# (--ecutwfc 60) でも、汎用の --set (--set dft.mixing_beta=0.2) でも構いません。
 # ------------------------------------------------------------------
 
-# which calculation engine to drive: qe | vasp | mlip
+# 使用する計算エンジン: qe | vasp | mlip
 engine: qe
 
-# ---------------------------- executables --------------------------
+# ---------------------------- 実行ファイル -------------------------
 qe:
-  bin_dir: ~/repos/q-e/bin        # used to fill in any command left null
+  bin_dir: ~/repos/q-e/bin        # null のままのコマンドを補完するために使う
   commands:
     pw: null                      # null -> {bin_dir}/pw.x
     dos: null
     projwfc: null
     bands: null
     pp: null
-  prefix: ezcal                   # QE prefix / outdir file names
-  pseudo_dir: ~/.ezcal/pseudo     # local pseudopotential library
-  pseudo_extra_dirs: []           # extra directories to search first; a file found
-                                  # there is copied into pseudo_dir so the generated
-                                  # input stays self-contained
-  # preference order when several pseudopotentials exist for an element
+  prefix: ezcal                   # QE の prefix / outdir 内のファイル名
+  pseudo_dir: ~/.ezcal/pseudo     # ローカルの擬ポテンシャルライブラリ
+  pseudo_extra_dirs: []           # 先に探索する追加ディレクトリ。ここで見つかった
+                                  # ファイルは pseudo_dir へコピーされ、生成される
+                                  # 入力ファイルが自己完結するようにする
+  # 一つの元素に複数の擬ポテンシャルがある場合の優先順位
   pseudo_preference: [kjpaw, rrkjus, paw, us, nc]
-  pseudo_download: true           # fetch missing UPFs from the QE website
+  pseudo_download: true           # 不足している UPF を QE の公式サイトから取得する
   pseudo_source: https://pseudopotentials.quantum-espresso.org/upf_files
 
 vasp:
-  command: vasp_std               # or 'mock-vasp' (aiida-vasp) to replay recorded runs
-  incar: {}                       # extra/override INCAR tags; a null value deletes one
-  incar_mode: merge               # merge | replace (replace: vasp.incar IS the INCAR)
+  command: vasp_std               # 記録済み計算を再生する場合は 'mock-vasp' (aiida-vasp)
+  incar: {}                       # INCAR タグの追加・上書き。値を null にすると削除
+  incar_mode: merge               # merge | replace (replace: vasp.incar がそのまま INCAR)
   kpoints_style: gamma            # gamma | monkhorst
-  potcar_dir: null                # licensed POTCAR library (potpaw_PBE/...)
+  potcar_dir: null                # ライセンス済み POTCAR ライブラリ (potpaw_PBE/...)
   potcar_functional: PBE
   potcar_mode: auto               # auto | library | placeholder
-                                  #   auto -> library if potcar_dir is set, else a clearly
-                                  #   labelled placeholder when the command is a mock
-  potcar_map: {}                  # {Si: Si_sv} element -> POTCAR directory name
-  magmom_default: 1.0             # MAGMOM (Bohr magneton) for sites without a value.
-                                  # dft.starting_magnetization / --magmom / --afm are
-                                  # passed through unchanged: QE reads them as a fraction
-                                  # of the valence charge, VASP as Bohr magneton.
-  mock:                           # aiida-vasp's mock-vasp: hashes INCAR/KPOINTS/POSCAR and
-    registry: null                #   replays the outputs recorded under this directory
-    vasp_cmd: null                #   real VASP to run (and record) on a registry miss
+                                  #   auto -> potcar_dir があればライブラリを使い、
+                                  #   なければモック実行時に明示的なダミーを置く
+  potcar_map: {}                  # {Si: Si_sv} 元素 -> POTCAR ディレクトリ名
+  magmom_default: 1.0             # 値が与えられないサイトの MAGMOM (ボーア磁子)。
+                                  # dft.starting_magnetization / --magmom / --afm は
+                                  # そのまま渡される: QE は価電子数に対する割合として、
+                                  # VASP はボーア磁子として解釈する点に注意。
+  mock:                           # aiida-vasp の mock-vasp: INCAR/KPOINTS/POSCAR を
+    registry: null                #   ハッシュ化し、このディレクトリに記録した出力を再生する
+    vasp_cmd: null                #   レジストリに無い場合に実行 (かつ記録) する実 VASP
 
+# MLIP / NNP: ASE の calculator を作れるものなら何でも使える。
+#   `ezcal mlip list`      使えるレシピと必要な依存を表示
+#   `ezcal mlip template`  自前ポテンシャル用のスクリプト雛形を取り出す
 mlip:
-  backend: sevennet               # sevennet | (future) mace, chgnet ...
-  model: 7net-0                   # SevenNet checkpoint name or path
-  device: cpu
-  fmax: 0.02                      # force threshold for relaxation, eV/Ang
+  backend: sevennet               # 同梱レシピ名: sevennet | mace | chgnet | orb |
+                                  #   matgl | emt | lj (calculators/recipes/*.py)
+  model: null                     # モデル名またはチェックポイントのパス。
+                                  #   null なら各レシピの既定 (SevenNet は 7net-0)。
+                                  #   SevenNet: 7net-0 | 7net-l3i5 | 7net-mf-ompa |
+                                  #             7net-omat | 7net-omni ...
+  device: cpu                     # cpu | cuda | auto
+  options: {}                     # レシピの build() にそのまま渡る追加引数。
+                                  #   例 (SevenNet 多重忠実度): {modal: mpa}
+  script: null                    # 自前の calculator スクリプト (.py)。
+                                  #   build(**options) が calculator を返せばよい
+  factory: null                   # 'module:attribute' 形式の import パス。
+                                  #   例: mace.calculators:mace_mp
+  recipe_dirs: []                 # 追加のレシピ置き場 (同じ形式の .py を探索する)
+  fmax: 0.02                      # 構造最適化の力の収束条件 (eV/Ang)
   steps: 300
   optimizer: FIRE
-  filter: frechet                 # cell filter used by vc-relax
+  filter: frechet                 # vc-relax で使うセルフィルタ
 
-# ------------------------------ running ----------------------------
+# ------------------------------ 実行設定 ---------------------------
 run:
   scheduler: local                # local | qsub
-  nproc: 8                        # MPI ranks
+  nproc: 8                        # MPI プロセス数
   mpirun: mpirun
-  mpirun_flags: []                # e.g. ["--bind-to", "core"]
+  mpirun_flags: []                # 例: ["--bind-to", "core"]
   omp_num_threads: 1
-  timeout: null                   # seconds, null = no limit
+  timeout: null                   # 秒。null は無制限
   qsub:
-    script: run_qe.sh             # template submitted with qsub
+    script: run_qe.sh             # qsub に投入する雛形スクリプト
     submit_cmd: qsub
     status_cmd: qstat
     queue: null
@@ -72,18 +86,18 @@ run:
     nodes: 1
     ppn: null                   # null -> run.nproc
     job_prefix: ezcal
-    wait: false                   # poll qstat until the job disappears
+    wait: false                   # ジョブが消えるまで qstat をポーリングする
     poll_interval: 30
 
 # ------------------------------- DFT -------------------------------
 dft:
-  functional: pbe                 # pbe | pbesol | pz | lda  (pseudo choice + input_dft)
-  input_dft: null                 # force QE's input_dft, e.g. 'vdw-df2-b86r'
-  ecutwfc: null                   # Ry, null -> taken from the pseudopotential headers
-  ecutrho: null                   # Ry, null -> auto (dual 8 for US/PAW, 4 for NC)
-  ecut_safety: 1.0                # multiply the suggested cutoffs by this factor
-  kmesh: null                     # [nx, ny, nz]; null -> derived from kspacing
-  kspacing: 0.25                  # 1/Angstrom (includes the 2*pi factor)
+  functional: pbe                 # pbe | pbesol | pz | lda (擬ポテンシャル選択 + input_dft)
+  input_dft: null                 # QE の input_dft を強制指定。例: 'vdw-df2-b86r'
+  ecutwfc: null                   # Ry。null -> 擬ポテンシャルのヘッダから取得
+  ecutrho: null                   # Ry。null -> 自動 (US/PAW は dual 8、NC は 4)
+  ecut_safety: 1.0                # 推奨カットオフに掛ける安全係数
+  kmesh: null                     # [nx, ny, nz]。null -> kspacing から算出
+  kspacing: 0.25                  # 1/Angstrom (2*pi の因子を含む)
   koffset: [0, 0, 0]
   occupations: smearing           # smearing | fixed | tetrahedra
   smearing: mv                    # mv | gaussian | mp | fd
@@ -93,77 +107,150 @@ dft:
   mixing_mode: plain
   electron_maxstep: 200
   diagonalization: david
-  nspin: 1                        # 1 = non magnetic, 2 = collinear spin polarised
-  starting_magnetization: {}      # {Fe: 0.5} or {} -> 0.3 on every element when nspin=2
-  magnetic_sublattices: {}        # antiferromagnets: {Fe: [0.6, -0.6]} labels the Fe
-                                  # sites Fe1, Fe2, Fe1, ... in the order they appear,
-                                  # so pw.x sees two species and lowers the symmetry.
-                                  # The cell must already hold the ordering (--as-is).
+  nspin: 1                        # 1 = 非磁性、2 = 共線スピン分極
+  starting_magnetization: {}      # {Fe: 0.5}。{} なら nspin=2 のとき全元素に 0.3
+  magnetic_sublattices: {}        # 反強磁性体: {Fe: [0.6, -0.6]} と書くと、出現順に
+                                  # Fe サイトへ Fe1, Fe2, Fe1, ... とラベルを振る。
+                                  # pw.x からは 2 種の元素に見え、対称性が下がる。
+                                  # セル側に既に秩序が含まれている必要がある (--as-is)。
   tot_magnetization: null
   nbnd: null
-  hubbard_u: {}                   # {Fe: 4.0}, written as a HUBBARD card (QE >= 7.1)
+  hubbard_u: {}                   # {Fe: 4.0}。HUBBARD カードとして出力 (QE >= 7.1)
   vdw_corr: null                  # grimme-d3 | grimme-d2 | xdm | ts
-  assume_isolated: null           # makov-payne | martyna-tuckerman ... for molecules
+  assume_isolated: null           # 分子系向け: makov-payne | martyna-tuckerman ...
   nosym: false
   tstress: true
   tprnfor: true
 
-# --------------------------- relaxation ----------------------------
+# --------------------------- 構造最適化 ----------------------------
 relax:
   etot_conv_thr: 1.0e-5
   forc_conv_thr: 1.0e-4
-  press_conv_thr: 0.5             # kbar (QE unit)
+  press_conv_thr: 0.5             # kbar (QE の単位)
   ion_dynamics: bfgs
   cell_dynamics: bfgs
   cell_dofree: all
   nstep: 100
-  press: 0.0                      # target pressure, kbar
+  press: 0.0                      # 目標圧力 (kbar)
 
 # ------------------------------ nscf -------------------------------
 nscf:
-  kmesh_scale: 2                  # nscf mesh = scf mesh * scale (for a smooth DOS)
+  kmesh_scale: 2                  # nscf のメッシュ = scf のメッシュ * scale (滑らかな DOS 用)
   occupations: tetrahedra
-  nbnd_extra_ratio: 0.3           # extra empty bands, fraction of occupied bands
+  nbnd_extra_ratio: 0.3           # 追加する空バンド数 (占有バンド数に対する割合)
   conv_thr_scale: 0.1
 
-# ------------------------------ bands ------------------------------
+# ------------------------------ バンド -----------------------------
 bands:
-  line_density: 25                # k-points per (2*pi/Angstrom) of path length
+  line_density: 25                # 経路長 (2*pi/Angstrom) あたりの k 点数
   min_points_per_segment: 6
   nbnd_extra_ratio: 0.4
   symprec: 1.0e-5
-  emin: null                      # plot window relative to E_F (eV)
+  emin: null                      # E_F を基準としたプロット窓 (eV)
   emax: null
 
-# ------------------------------- dos -------------------------------
+# ------------------------------ 状態密度 ---------------------------
 dos:
-  degauss: 0.01                   # Ry, dos.x broadening (0 -> use the scf smearing)
-  deltae: 0.02                    # eV, energy grid step
+  degauss: 0.01                   # Ry。dos.x の広がり (0 -> scf のスメアリングを使う)
+  deltae: 0.02                    # eV。エネルギーグリッドの刻み幅
   emin: null
   emax: null
-  pdos: true                      # also run projwfc.x
+  pdos: true                      # projwfc.x も実行する
 
-# ------------------------- charge density --------------------------
+# ------------------------------ 電荷密度 ---------------------------
 charge:
   kinds: [density]                # density | spin | ae_valence | ae_total | potential
-                                  #   density    pp.x plot_num=0, the pseudo valence density
-                                  #   spin       plot_num=6, rho_up - rho_down (auto when nspin=2)
-                                  #   ae_valence plot_num=17, PAW all-electron valence
-                                  #   ae_total   plot_num=21, PAW all-electron incl. core
-                                  # 17 and 21 need a much denser FFT grid than an scf
-                                  # normally uses; ezcal checks the integral and says so.
-  bader: true                     # partition the density into atomic basins
-  bader_source: density           # which cube to partition
-  slice_axis: null                # null -> one slice per axis; 0/1/2 -> just that one
-  slice_fraction: 0.5             # where along that axis to cut
-  isosurface: true                # 3D isosurface (plotly only)
-  isosurface_grid: 64             # the isosurface is downsampled to this many points/axis
-  keep_cube: true                 # cube files are a few MB each
+                                  #   density    pp.x plot_num=0、擬ポテンシャルの価電子密度
+                                  #   spin       plot_num=6、rho_up - rho_down (nspin=2 で自動)
+                                  #   ae_valence plot_num=17、PAW の全電子価電子密度
+                                  #   ae_total   plot_num=21、PAW の全電子密度 (内殻込み)
+                                  # 17 と 21 は通常の scf よりずっと密な FFT グリッドが
+                                  # 必要。ezcal は積分値を確認して警告する。
+  bader: true                     # 電荷密度を原子ベイスンに分割する
+  bader_source: density           # 分割対象の cube ファイル
+  slice_axis: null                # null -> 各軸につき 1 断面。0/1/2 -> その軸のみ
+  slice_fraction: 0.5             # その軸のどの位置で切るか
+  isosurface: true                # 3D 等値面 (電荷密度を空間にマッピング)。
+                                  #   plotly -> 回転できる html、matplotlib -> png
+  isosurface_grid: 64             # 等値面はこの軸あたり点数までダウンサンプルされる
+  isosurface_levels: null         # 等値面の値 (e/bohr^3) を直接指定する。
+                                  #   null なら密度分布の分位点から自動で決める
+  isosurface_opacity: 0.45
+  map3d: true                     # 原子ごとの価数を 3D 空間にマッピングする
+                                  #   (色 = 電荷、大きさ = |電荷|、文字で値を表示)
+  map_source: auto                # auto | bader_charge | lowdin_charge |
+                                  #   moment_sphere | lowdin_moment
+  keep_cube: true                 # cube ファイルは 1 つ数 MB になる
 
-# ----------------------------- output ------------------------------
+# --------------------------- MD / モンテカルロ ---------------------------
+# `ezcal md` / `ezcal mc` (material-mc + ASE calculator)。
+# エンジンは使わず、mlip: が指す calculator をそのまま使う。
+md:
+  mode: md                        # md | mcmc | mcmd | mcrelax | kmc | kmc-voronoi |
+                                  #   kmcmd | kmc-voronoi-md | event-kmc
+  temperature_K: 300.0            # MD の目標温度 / MC の Metropolis 温度
+  supercell: null                 # [2, 2, 2] のように書くと入力構造を繰り返す
+  seed: null                      # 乱数シード (再現性が必要なとき)
+  progress: true                  # tqdm の進捗バー
+  verbose: false                  # material-mc のログを標準出力にも出す
+
+  # --- MD (mode: md / mcmd / kmcmd / kmc-voronoi-md の MD 部分) ---
+  steps: 500                      # MD / MC のステップ数 (サイクル型では使わない)
+  ensemble: nvt                   # nve | nvt | npt | nph = N P V T E のどれを固定するか
+  timestep_fs: 1.0
+  ttime_fs: 25.0                  # 熱浴の特性時間 (小さいほど強い)
+  pfactor_gpa_fs2: null           # 圧浴定数 [GPa fs^2]。null -> 562500
+  pressure_gpa: 0.0
+  npt_mask: null                  # [0, 0, 1] なら z 軸のみ可変
+  tchain: 3
+  init_temperature_K: null        # 初期速度の温度 (null -> temperature_K)
+  reinit_velocities: false
+  record_interval: 1              # MD / 緩和中の記録間隔
+
+  # --- MC 共通 ---
+  cycles: 5                       # サイクル型 (mcmd / mcrelax / kmcmd ...) の回数
+  mc_steps: 20                    # 1 サイクルあたりの MC ステップ数
+  md_steps: 100                   # 1 サイクルあたりの MD ステップ数
+  energy_mode: total              # total | peratom (peratom は原子別エネルギーが要る)
+  n_swap: 1                       # peratom モードでの同時スワップ数
+  swap_min_distance: 6.0
+  local_radius: null
+  refresh_interval: 10
+  species: null                   # [Fe, Pt] または [[Fe, Pt], [Li, O]] (グループ指定)
+  swap_pairs: null                # [[Fe, Pt]] のように交換を許すペアを直接指定
+  shuffle: false                  # 初期配置の元素をランダムに並べ替える
+  save_interval: 10               # 構造スナップショットの保存間隔
+  neighbor_cutoff: 3.5            # kmc / kmcmd の近接カットオフ (Ang)
+  r0: null                        # kmc-voronoi のガウス重み距離 (null -> 自動)
+  voronoi_cutoff: 0.0             # 0 -> 第一近接距離の 2.2 倍を自動設定
+
+  # --- mcrelax ---
+  fmax: 0.05
+  max_itr: 200
+  optimizer: FIRE
+
+  # --- event-kmc ---
+  mobile_species: null            # 例: Li (必須)
+  vacancy_count: 1                # 可動元素から無作為に空孔を作る個数
+  vacancy_indices: null           # 位置を指定したい場合は原子の番号 (0 始まり)
+  hop_cutoff: null
+  nu0_hz: 1.0e13
+  barrier_method: neb             # neb | rrp
+  n_images: 5
+  neb_fmax: 0.05
+  neb_steps: 300
+  env_cutoff: 6.0
+  charge: 1.0                     # 伝導度換算に使う可動イオンの形式電荷
+  energy_interval: 50
+
+  # --- 出力 ---
+  combine_traj: true              # スナップショットを combined.traj にまとめる
+  view_notebook: false            # nglview で再生する notebook を作る (要 nglview)
+
+# ------------------------------- 出力 ------------------------------
 output:
-  dir: ezcal_out                  # results root; each run gets a sub directory
+  dir: ezcal_out                  # 結果の出力先ルート。実行ごとにサブディレクトリを作る
   plot: [matplotlib]              # matplotlib | plotly | both | none
   image_format: png
   dpi: 200
-  keep_wavefunctions: false       # delete tmp/*.wfc* after a successful run
+  keep_wavefunctions: false       # 成功後に tmp/*.wfc* を削除するかどうか

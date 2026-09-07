@@ -1,6 +1,7 @@
 # ezcal 実装レポート
 
 - 作成日: 2026-09-03（反強磁性・VASP エンジン・ベンチマーク・電荷解析を追記）
+- 更新日: 2026-09-07（電荷密度・価数の 3D 可視化、MD/モンテカルロ、ポテンシャル切り替えを追記）
 - 対象: `mission.md`「ezcal(Easy Calculation)パッケージの作成」
 - 環境: WSL2 / Ubuntu, Python 3.12.3 (`/home/tajimamainpc/.venv/ezcalenv312`),
   Quantum ESPRESSO 7.5 (`~/repos/q-e/bin`), CPU 16 コア (テストは 8 コア使用)
@@ -16,9 +17,12 @@
 | `qe_config.yaml` (雛形は `src/ezcal/data/default_config.yaml`) | 全既定値。`ezcal config init` で書き出し |
 | `run_qe.sh` | qsub 用テンプレート (パッケージ内にも同梱) |
 | `notebooks/ezcal_demo.ipynb` | MP API キーをその場で入力する形式のデモ (実行済みの `executed_ezcal_demo.ipynb` 付き) |
-| `tests/test_ezcal.py` | QE 不要の単体テスト 79 件 |
-| `02_ezcal_test/run_tests.sh` | 実計算を含む受け入れテスト 32 件 |
+| `tests/test_ezcal.py` | QE 不要の単体テスト 108 件 |
+| `02_ezcal_test/run_tests.sh` | 実計算を含む受け入れテスト 36 件 |
 | `03_qe_bench/` | 金属20＋酸化物20 の予実比較 (`ezcal bench`) |
+| `04_charge_mapping/` | 電荷密度・原子電荷・3D マッピングの検証 11 件 (20260907) |
+| `05_md_mc_test/` | material-mc による MD / MC の検証 28 件 (20260907) |
+| `docs/manual.html` | 利用者向けハンドブック (全 15 章) |
 | `README.md` / `docs/EXTENDING.md` | 使い方 / 拡張手順 |
 
 インストールとテストは以下で再現できます。
@@ -26,8 +30,10 @@
 ```bash
 source /home/tajimamainpc/.venv/ezcalenv312/bin/activate
 uv pip install -e .
-python -m pytest tests -q                 # 79 passed
-cd 02_ezcal_test && ./run_tests.sh full   # 32 passed, 0 failed
+python -m pytest tests -q                 # 108 passed
+cd 02_ezcal_test  && ./run_tests.sh full  # 36 passed, 0 failed
+cd 04_charge_mapping && ./run_tests.sh    # 11 passed, 0 failed
+cd 05_md_mc_test     && ./run_tests.sh    # 28 passed, 0 failed
 ```
 
 ---
@@ -59,6 +65,14 @@ cd 02_ezcal_test && ./run_tests.sh full   # 32 passed, 0 failed
 | ベンチマーク用の動作確認コマンド | `ezcal bench list/run/report`。金属20＋酸化物20を `auto` で流し、実験値と Materials Project に突き合わせる |
 | 電荷密度・原子電荷の出力 (20260903) | `ezcal charge`。pp.x で cube、Bader (内蔵実装) と Löwdin の 2 通りの原子電荷、平面平均・2D断面・3D等値面、CSV |
 | バンド計算後の物理量出力 (20260903) | `properties.md` / `properties.json` にギャップ (金属は 0 と明記)・フェルミ準位・VBM/CBM・原子ごとの磁気モーメントを集約 |
+| 電荷密度分布の 3D 描画 (20260907) | `plots/<kind>_isosurface.png` / `.html`。等電荷面を実空間にマッピング。png は marching cubes、html は plotly。周期境界で面が閉じ、原子 (CPK 色) とセル稜線を重ねる。`--iso-level` で値を指定可 |
+| 電荷マッピングの 3D 描画 (20260907) | `plots/charge_map.png` / `.html`。原子を実座標に置き、価数で色 (赤=陽イオン / 青=陰イオン)、\|価数\| で大きさを変え、値を文字で表示。`--charge-map-source` で Bader / Löwdin / 磁気モーメントを切り替え |
+| 電荷計算・マッピングのテスト (20260907) | `04_charge_mapping/` (Si / MgO / Fe(スピン))。11 件すべて PASS |
+| material-mc による MD モード (20260907) | `ezcal md` / `ezcal mc`。`md.py` が material-mc をラップし、記録・作図・レポートは ezcal 側で共通化 |
+| material-mc チュートリアルの網羅 (20260907) | 9 モード (md / mcmc / mcmd / mcrelax / kmc / kmc-voronoi / kmcmd / kmc-voronoi-md / event-kmc) をすべて CLI から実行可能。`ezcal mlip modes` で一覧 |
+| MD テストは SevenNet ベース (20260907) | `05_md_mc_test/` で 28 件すべて PASS (既定 calculator は SevenNet 7net-0) |
+| MLIP モデルの切り替え (20260907) | `--model` / `--mlip-backend` / `--calc-script` / `--calc-factory` / `--calc-option`。レシピは 1 ファイル 1 ポテンシャル (`calculators/recipes/`)、`mlip.recipe_dirs` で追加可 |
+| NNP は ASE calculator を定義できれば動く設計 (20260907) | `ezcal.calculators` が唯一の入口。`engines/mlip.py` も `md.py` も calculator の作り方を知らない |
 
 ---
 
@@ -67,15 +81,22 @@ cd 02_ezcal_test && ./run_tests.sh full   # 32 passed, 0 failed
 ```
 CLI (cli.py)
    └── Config (config.py)          既定値の合成と --set による任意キー上書き
-   └── Workflow (workflows.py)     タスク連鎖: bands なら scf を前に流す
-          ├── Engine (engines/)    qe / vasp / mlip   ← 差し替え点
-          └── Scheduler (scheduler.py)  local / qsub / dry-run ← 実行方法の差し替え点
+   ├── Workflow (workflows.py)     タスク連鎖: bands なら scf を前に流す
+   │      ├── Engine (engines/)    qe / vasp / mlip   ← 計算コードの差し替え点
+   │      └── Scheduler (scheduler.py)  local / qsub / dry-run ← 実行方法の差し替え点
+   ├── Dynamics (md.py)            MD / MC (material-mc) ← モードの差し替え点
+   │      └── Calculators (calculators/)  ASE calculator ← ポテンシャルの差し替え点
    └── plotting.py                 matplotlib / plotly
 ```
 
 エンジンは `CalcResult` (エネルギー・力・応力・E_F・ギャップ・磁化・構造・生データ) だけを
 返す約束になっており、CLI・ワークフロー・作図はエンジンの種類を知りません。
 そのため VASP や別の MLIP を足しても、追加するのは 1 ファイルとレジストリの 1 行だけです。
+
+ポテンシャル (MLIP / NNP) はさらに独立していて、`ezcal.calculators` が
+「ASE calculator を 1 つ作る」ことだけを引き受けます。`engines/mlip.py` も `md.py` も
+calculator の作り方を知らないため、新しいポテンシャルは **ezcal のコードを 1 行も
+変えずに** 追加できます (レシピを 1 ファイル置くか、`--calc-script` で指すだけ)。
 
 ### 「何も指定しなくても正しく回る」ための自動決定
 
@@ -172,17 +193,22 @@ CLI (cli.py)
 
 ### 5.1 単体テスト (QE 不要)
 
-`python -m pytest tests -q` → **79 passed** (5 s)。
+`python -m pytest tests -q` → **108 passed** (7 s)。
 設定の合成、k メッシュ、バンド経路、擬ポテンシャル選択、入力ファイル生成
 (スピン・U・relax・explicit k 点)、ギャップ判定、qsub スクリプト生成、
 反強磁性 (副格子分割・ラベル長・磁気単位胞のサイズ検査・磁気セルのバンド経路・
 XML ラベルの往復)、VASP (INCAR の整数/実数の書き分け・タスクタグの優先順位・
 MAGMOM/LDAU の展開・POTCAR の扱い・記録済み計算とのハッシュ一致)、
 pw.x のエラー診断とカットオフの導出を検証。
+20260907 追加分では、3D 等値面と価数マッピングの書き出し (両バックエンド)、
+等値面の値の決め方、価数の列選択、calculator の解決 (レシピ探索・別名・
+モデル引数を渡す条件・自前スクリプト・import パス・依存不足の扱い)、
+MD/MC の全モード網羅とモード別引数、セル行列の三角化、`energy_log.csv` の
+読み取りと集計、時系列の作図、MD レポートの内容を検証。
 
 ### 5.2 受け入れテスト (実計算)
 
-`02_ezcal_test/run_tests.sh full` → **32 passed, 0 failed**。
+`02_ezcal_test/run_tests.sh full` → **36 passed, 0 failed**。
 
 | # | 内容 | 結果 |
 |---|---|---|
@@ -336,6 +362,92 @@ QE の再ビルドは不要でした (`pp.x` / `projwfc.x` は `make pwall` に�
 (mp-149)、フルワークフロー、matplotlib/plotly 表示、SevenNet 比較、qsub スクリプト生成まで
 含みます。API キーは `getpass` で入力する方式で、ファイルには残りません。
 
+### 5.9 電荷密度・価数の 3D 可視化 (20260907) — `04_charge_mapping/`
+
+1〜2 原子の系で 11 件、いずれも PASS。8 コア、収束条件は緩め (`--conv-thr 1e-6`)。
+
+| 系 | 性格 | ギャップ (eV) | Bader 電荷 (e) | 磁気モーメント (μ_B) |
+|---|---|---|---|---|
+| Si (2 原子) | 共有結合 | 0.710 | +0.081 / −0.079 | — |
+| MgO (2 原子) | イオン結合 | 4.738 | Mg +1.683 / O −1.683 | — |
+| Fe (1 原子, nspin=2) | 金属 + 強磁性 | 0 (金属) | −0.000 | +2.31 (実験 2.22) |
+
+- **等値面 (`<kind>_isosurface.png` / `.html`)**: 密度を軸あたり 64 点までダウンサンプルし、
+  周期境界で 1 ボクセル分パディングしてから marching cubes をかけます。こうしないと
+  セル端で面が切れ、原子が半分に割れて見えます。等値面は既定で 92 / 99 パーセンタイルの
+  2 枚。外側 (低い値) ほど不透明度を下げ、内側が透けて見えるようにしました。
+  スピン密度は 0 を中心に ±(赤/青) で塗り、片方に交差が無ければその面は描きません
+  (強磁性 Fe では正側だけが出ます)。
+- **価数マッピング (`charge_map.png` / `.html`)**: `atomic_charges.csv` の行をそのまま使い、
+  電荷を 0 中心の発散カラーマップに載せます。MgO では Mg が赤 (+1.68)、O が青 (−1.68) と
+  一目で分かります。plotly 版は hover で Löwdin・Bader・basin 体積も出ます。
+  `--charge-map-source moment_sphere` に切り替えると、同じ図が磁気モーメントの分布になります。
+- **静止画も出します**: 従来 3D は plotly (html) だけでしたが、報告書に貼れるよう
+  matplotlib 版 (png) を追加しました。`scikit-image` が無い環境では、しきい値以上の
+  ボクセルを点群として描く代替表示に落とします (図の意味は変わりません)。
+- **検算**: `check_charges.py` が符号 (Mg は陽イオン、O は陰イオン)、無極性系の
+  中性性 (Si は \|q\| < 0.15 e)、電荷の総和 0 を確認します。Si の ±0.08 e は
+  等価な 2 サイトに出るグリッド由来のばらつきで、on-grid Bader の既知の精度内です。
+- **再描画**: `ezcal plot <実行ディレクトリ>` が cube と CSV から図だけ作り直します
+  (QE の再実行なし)。等値面の値やマッピングの量を変えて見比べる用途です。
+
+### 5.10 MD / モンテカルロ (20260907) — `05_md_mc_test/`
+
+SevenNet (7net-0) を calculator として 28 件、いずれも PASS (合計 2 分 44 秒)。
+系は Cu-Ni ランダム合金 (fcc 32 原子) と bcc Li (16 原子)。乱数を使うモードなので、
+下の数値は代表的な 1 回の実行のものです (`--seed` で固定できます)。
+
+| モード | 実行内容 | 結果の要点 |
+|---|---|---|
+| `md` (nvt/nve/npt/nph) | 60 ステップ | 平均温度 316 K (nvt, 目標 800 K へ緩和途中)、npt で体積が 364→366 Å³ に応答。nve は熱浴が無く 158 K で揺らぐ |
+| `mcmc` | 40 ステップ, 900 K | 受理率 0.40。`--shuffle` / `--species` / He 空孔プレースホルダも動作 |
+| `mcmd` | 3 サイクル × (MD 20 + MC 10) | 受理率 0.63、平均温度 356 K、平均体積 365.5 Å³ |
+| `mcrelax` | 2 サイクル × (MC 10 + 緩和) | E が −157.00 → −157.15 eV に低下 |
+| `kmc` / `kmc-voronoi` | 40 ステップ | 受理率 0.73 / 0.70 |
+| `kmcmd` / `kmc-voronoi-md` | 2 サイクル | 受理率 0.55 / 0.35 |
+| `event-kmc` | Li 空孔 1 個, 3 ステップ | D = 3.9×10⁻⁴ cm²/s、σ = 56 S/cm、CI-NEB で障壁を算出 |
+
+- **モード以外のチュートリアル機能も確認**しました。元素の指定 (`--species`)、
+  初期配置のシャッフル (`--shuffle --seed`)、He を空孔プレースホルダとして置く使い方
+  (He ⇔ 原子のスワップが空孔ジャンプになる)、記録一式 (`energy_log.csv` /
+  スナップショット / `combined.traj`)。
+- **material-mc は改造していません**。`ezcal.md` が構造の用意 (スーパーセル・空孔生成)、
+  calculator の解決、`md:` セクションからの引数組み立て、後処理を受け持ちます。
+- **後処理は全モード共通**です。`energy_log.csv` から、記録に存在する量
+  (ポテンシャルエネルギー・温度・全エネルギー・体積・MSD) だけを縦に並べた
+  `plots/dynamics.png` / `.html` を描き、フェーズ (mcmc / md-nvt / relax …) を色で分けます。
+  `summary.json` と `report.md` に設定・受理率・平均量 (後半の平均) をまとめます。
+- **material-mc 側に 1 つバグを見つけました** (回避済み。詳細は 6 節)。
+
+### 5.11 ポテンシャルの切り替え (20260907)
+
+同じ構造 (Cu-Ni 32 原子) の初期エネルギーを、指定方法だけ変えて比較しました。
+
+| 指定 | calculator | E 初期 (eV) |
+|---|---|---|
+| (既定) | sevennet (7net-0) | −156.9985 |
+| `--model 7net-l3i5` | sevennet (7net-l3i5) | −156.8949 |
+| `--model 7net-0_22may2024` | sevennet (7net-0_22may2024) | −156.5527 |
+| `--mlip-backend emt` | emt | +0.5314 |
+| `--calc-factory ase.calculators.emt:EMT` | factory | +0.5314 |
+| `--calc-script my_potential.py` | script (7net-0 の checkpoint を直接指定) | −156.9985 |
+
+値が指定どおりに変わっており、切り替えが実際に効いています (script 版は 7net-0 と
+同じ checkpoint を読んでいるので一致するのが正解)。
+
+- **設計**: calculator の作り方は `ezcal.calculators` だけが知っています。
+  解決の優先順位は `mlip.script` > `mlip.factory` > `mlip.backend` (レシピ名) で、
+  `mlip.options` がそのまま `build()` の引数になります。
+- **レシピは 1 ファイル 1 ポテンシャル**です (`calculators/recipes/*.py`)。
+  同梱は sevennet / mace / chgnet / orb / matgl / emt / lj の 7 種。
+  同じ形式のファイルを置いて `mlip.recipe_dirs` に足せば、パッケージを触らずに増やせます。
+- **`--model` / `--device` は、そのレシピが引数として受け取る場合にだけ渡します**。
+  EMT のようにモデルの概念が無いレシピに `--model 7net-0` が漏れないようにするためです。
+- **依存が無くても一覧は壊れません**。`ezcal mlip list` は import できるかを表示し、
+  足りない場合は導入コマンド (`uv pip install mace-torch` 等) を案内します。
+- `emt` / `lj` は ASE 内蔵なので、torch の無い環境でもワークフローの配線を確認できます
+  (単体テストはこれを使っています)。
+
 ---
 
 ## 6. 既知の制約
@@ -354,7 +466,27 @@ QE の再ビルドは不要でした (`pp.x` / `projwfc.x` は `make pwall` に�
 - **mock-vasp のレジストリは 1 ディレクトリのみ**: aiida-vasp 5.1 の
   `MockRegistry.__init__` が複数パスを受け付けない実装のため、設定にリストを書いても
   先頭のみ使います。
-- **MLIP は電子状態を扱いません**: `bands`/`dos`/`nscf` は実行せず、理由を返します。
+- **MLIP は電子状態を扱いません**: `bands`/`dos`/`nscf`/`charge` は実行せず、理由を返します。
+  MD / MC も同じで、`ezcal md` / `ezcal mc` は電子状態に関する量を出しません。
+- **material-mc の `ensure_triangular_cell` に不具合があります (ezcal 側で回避済み)**:
+  ASE の NPT 積分器 (`ase.md.melchionna.NPT`) はセル行列の非対角成分が
+  **厳密に** 0 であることを要求します (`m[1,0] == m[2,0] == m[2,1] == 0.0`)。
+  ところが `mc/dynamics.py` の `ensure_triangular_cell` は `np.allclose` (atol 1e-8) で
+  判定するため、CIF の読み書きや spglib の標準化で入る 1e-15 程度の残差を
+  「三角である」と見なして素通りさせ、その直後に ASE 側で
+  `NotImplementedError: Can (so far) only operate on lists of atoms where the
+  computational box is a triangular matrix` になります。CIF 経由の構造で
+  `ensemble="npt"/"nph"` を使うと必ず踏みます。
+  ezcal では `md.sanitize_cell()` が material-mc へ渡す前に残差を 0 に丸め、
+  三角でないセルは標準姿勢へ剛体回転します (スケール座標は不変)。
+  **material-mc 側の修正案**: `ensure_triangular_cell` で早期 return する際に
+  `atoms.set_cell(np.triu(cell))` (または `np.tril`) と丸めてから返すか、
+  `Cell.fromcellpar` で組み直した後に微小成分を 0 に丸めること
+  (`fromcellpar` 自身が cos(90°)=6.1e-17 由来の残差を作るため、後者も丸めが要ります)。
+- **`ezcal md` / `ezcal mc` は 1 プロセスで動きます**: `--np` は効きません
+  (MLIP の推論は torch のスレッド並列に任せます)。qsub 投入にも未対応です。
+- **event-kMC は CI-NEB を毎イベント走らせます**。障壁は局所環境でキャッシュされますが、
+  初回は系の大きさに比例して時間がかかります。テストでは 3 ステップに絞っています。
 - **非共線**磁性とスピン軌道相互作用は未対応です (共線の強磁性・反強磁性・フェリ磁性は対応)。
   反強磁性では磁気単位胞をユーザーが与える必要があり、磁気構造の自動探索は行いません。
 - フォノン、NEB は未対応です
@@ -367,8 +499,11 @@ QE の再ビルドは不要でした (`pp.x` / `projwfc.x` は `make pwall` に�
 - **別の計算コード**: `Engine` を継承して `run()` で `CalcResult` を返し、
   `engines/__init__.py` に 1 行登録。VASP は `INCAR_MAP` / `TASK_INCAR` に
   ezcal の汎用オプションと INCAR タグの対応表を用意済み。
-- **別の MLIP**: `MLIPEngine.calculator()` に ASE calculator を返す分岐を足すだけ
-  (MACE / CHGNet 用の分岐は雛形として記述済み)。
+- **別の MLIP / NNP**: ASE calculator を返す関数を 1 つ書くだけ。
+  レシピを `calculators/recipes/` (または `mlip.recipe_dirs` の任意のディレクトリ) に置くか、
+  `--calc-script` / `--calc-factory` でその場で指定します。ezcal 本体の変更は不要です。
+- **別の MD / MC モード**: material-mc に `run_*` が増えたら `md.py` の `_MODE_LIST` に
+  1 行足すだけで、CLI・作図・レポートはそのまま使えます。
 - **別のジョブスケジューラ**: `Scheduler` を継承。テンプレート方式は共通なので、
   Slurm なら `sbatch` 用テンプレートと `submit_cmd`/`status_cmd` の変更だけでも動きます。
 - **新しいタスク**: `workflows.CHAINS` に前段を書き、エンジンの `supported` に追加。

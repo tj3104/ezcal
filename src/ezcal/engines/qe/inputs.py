@@ -1,4 +1,4 @@
-"""Quantum ESPRESSO input file writers."""
+"""Quantum ESPRESSO の入力ファイル生成。"""
 
 from __future__ import annotations
 
@@ -9,12 +9,12 @@ import numpy as np
 
 BOHR = 0.529177210903
 
-#: which Hubbard manifold to use for an element (QE >= 7.1 HUBBARD card)
+#: 各元素で使う Hubbard 多様体の指定 (QE 7.1 以降の HUBBARD カード)
 _BLOCK_OFFSET = {"s": 0, "p": 0, "d": -1, "f": -2}
 
 
 def fortran(value: Any) -> str:
-    """Render a python value as Fortran namelist syntax."""
+    """Python の値を Fortran の namelist 記法で書き出す。"""
     if isinstance(value, bool):
         return ".true." if value else ".false."
     if isinstance(value, str):
@@ -36,7 +36,7 @@ def namelist(name: str, values: Mapping[str, Any]) -> str:
 
 
 def hubbard_manifold(label: str) -> str:
-    """``Fe`` -> ``Fe-3d``; a sublattice label keeps its own name (``Fe1-3d``)."""
+    """``Fe`` -> ``Fe-3d``。副格子ラベルはその名前のまま (``Fe1-3d``)。"""
     from pymatgen.core.periodic_table import Element
 
     from ezcal.structures import label_element
@@ -48,10 +48,10 @@ def hubbard_manifold(label: str) -> str:
 
 
 def species_list(structure) -> list[str]:
-    """Distinct pw.x species, in the order they first appear.
+    """pw.x の元素種を、最初に現れた順に重複なく並べる。
 
-    With magnetic sublattices these are labels (``Fe1``, ``Fe2``) rather than
-    plain element symbols.
+    磁気副格子がある場合、ここに入るのは素の元素記号ではなくラベル
+    (``Fe1``、``Fe2``) になる。
     """
     from ezcal.structures import site_labels
 
@@ -63,7 +63,7 @@ def species_list(structure) -> list[str]:
 
 
 class PwInput:
-    """Assemble a ``pw.x`` input file from a structure plus the ezcal config."""
+    """構造と ezcal の設定から ``pw.x`` の入力ファイルを組み立てる。"""
 
     def __init__(
         self,
@@ -98,7 +98,7 @@ class PwInput:
         self.startingwfc = startingwfc
         self.species = species_list(structure)
 
-    # ------------------------------------------------------------ blocks
+    # ------------------------------------------------------------ 各ブロック
     def control(self) -> dict:
         cfg = self.config
         calc = "vc-relax" if self.calculation == "vc-relax" else self.calculation
@@ -145,7 +145,7 @@ class PwInput:
             values["nspin"] = 2
             mags = dict(cfg.get("dft.starting_magnetization", {}) or {})
             for i, label in enumerate(self.species, start=1):
-                # a sublattice label wins over the plain element entry
+                # 副格子ラベルの指定は、素の元素名の指定より優先する
                 magnetization = mags.get(label, mags.get(label_element(label), 0.3))
                 values[f"starting_magnetization({i})"] = float(magnetization)
             if cfg.get("dft.tot_magnetization") is not None:
@@ -195,7 +195,7 @@ class PwInput:
         values.update(self.extra.get("cell", {}))
         return values
 
-    # ------------------------------------------------------------- cards
+    # ------------------------------------------------------------- カード
     def card_species(self) -> str:
         from pymatgen.core.periodic_table import Element
 
@@ -247,14 +247,14 @@ class PwInput:
         projection = self.config.get("dft.hubbard_projection", "ortho-atomic")
         lines = [f"HUBBARD ({projection})"]
         for label in self.species:
-            # "Fe1" picks up its own entry, otherwise the plain "Fe" one
+            # "Fe1" は自身の指定を拾い、無ければ素の "Fe" の指定を使う
             value = hubbard.get(label, hubbard.get(label_element(label)))
             if value is None:
                 continue
             lines.append(f"  U {hubbard_manifold(label)} {float(value):.4f}")
         return "\n".join(lines) if len(lines) > 1 else ""
 
-    # ------------------------------------------------------------ output
+    # ------------------------------------------------------------ 出力
     def to_string(self) -> str:
         blocks = [
             namelist("control", self.control()),
@@ -279,7 +279,7 @@ class PwInput:
         return path
 
 
-# --------------------------------------------------------- post processing
+# ------------------------------------------------------------------ 後処理
 def dos_input(prefix: str, outdir: str, config, fname: str) -> str:
     values: dict[str, Any] = {
         "prefix": prefix,
@@ -312,7 +312,7 @@ def projwfc_input(prefix: str, outdir: str, config, filpdos: str) -> str:
 
 def pp_input(prefix: str, outdir: str, plot_num: int, fileout: str,
              spin_component: int | None = None) -> str:
-    """Input for ``pp.x``: dump a quantity on the FFT grid as a Gaussian cube."""
+    """``pp.x`` の入力: FFT グリッド上の量を Gaussian cube として書き出す。"""
     inputpp: dict[str, Any] = {"prefix": prefix, "outdir": outdir, "plot_num": plot_num}
     if spin_component is not None:
         inputpp["spin_component"] = spin_component
