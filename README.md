@@ -25,16 +25,38 @@ ezcal mc   FePt.cif --mode mcmc --steps 1000
 
 ## 1. インストール
 
+Python 3.10 以上が必要です。仮想環境を作り、リポジトリのルートで
+editable インストールします (`pip` でも `uv pip` でも構いません)。
+
 ```bash
-source /home/tajimamainpc/.venv/ezcalenv312/bin/activate
-uv pip install -e /home/tajimamainpc/06_claude_code/08_qez          # 本体
-uv pip install -e '/home/tajimamainpc/06_claude_code/08_qez[all]'   # + mp-api, jupyter
-uv pip install sevenn                                               # MLIP を使う場合
-uv pip install -e ~/repos/material_monte_carlo/mc                   # MD / MC を使う場合
+python -m venv .venv && source .venv/bin/activate   # conda / uv venv でも可
+cd /path/to/ezcal                                   # このリポジトリのルート
+
+pip install -e .                # 本体
+pip install -e '.[all]'         # + mp-api, jupyter, aiida-vasp, material-mc
+pip install -e '.[mlip]'        # MLIP (SevenNet) を使う場合
+pip install -e '.[md]'          # MD / MC (material-mc) を使う場合
 ```
 
-Quantum ESPRESSO の実行ファイルは `qe_config.yaml` の `qe.bin_dir`
-(既定 `~/repos/q-e/bin`) から探します。
+追加機能ごとの extras は `mp` / `mlip` / `md` / `vasp` / `notebook` / `dev` です。
+material-mc をローカルのソースから使う場合は
+`pip install -e /path/to/material_monte_carlo/mc` のようにパスを指定してください。
+
+インストールの確認:
+
+```bash
+ezcal --help
+ezcal engines        # 利用可能なエンジン
+python -m pytest tests -q
+```
+
+Quantum ESPRESSO の実行ファイルは `qe_config.yaml` の `qe.bin_dir` から探します
+(既定値は `~/repos/q-e/bin`)。別の場所にある場合は設定するか、PATH を通してください。
+
+```bash
+ezcal config init                        # カレントに qe_config.yaml を書き出して編集
+ezcal scf Si.cif --set qe.bin_dir=/opt/qe/bin    # 1 回だけ上書きする場合
+```
 
 ## 2. 何が自動で決まるか
 
@@ -349,7 +371,7 @@ ezcal bench report 03_qe_bench --mp-api-key <KEY>     # 予実比較
 ## 13. 分子動力学とモンテカルロ (`ezcal md` / `ezcal mc`)
 
 機械学習ポテンシャルで MD と配置サンプリングを回します。計算の中身は
-**material-mc**（ASE ベースの MC/MD パッケージ、`~/repos/material_monte_carlo`）が担当し、
+**material-mc**（ASE ベースの MC/MD パッケージ。1 節の `md` extras で入ります）が担当し、
 ezcal は構造の読み込み・calculator の用意・記録と作図を受け持ちます。
 
 ```bash
