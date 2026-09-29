@@ -5,7 +5,7 @@ Quantum ESPRESSO。エンジン層はプラグイン構造になっており、C
 手を入れずに VASP や MLIP (SevenNet) へ差し替えられる。
 """
 
-__version__ = "0.2.0"
+__version__ = "0.4.0"
 
 from ezcal.config import Config, load_config  # noqa: E402,F401
 

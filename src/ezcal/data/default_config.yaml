@@ -196,7 +196,7 @@ charge:
   keep_cube: true                 # cube ファイルは 1 つ数 MB になる
 
 # --------------------------- MD / モンテカルロ ---------------------------
-# `ezcal md` / `ezcal mc` (material-mc + ASE calculator)。
+# `ezcal md-mlip` / `ezcal mc` (material-mc + ASE calculator)。旧名 `ezcal md` も使える。
 # エンジンは使わず、mlip: が指す calculator をそのまま使う。
 md:
   mode: md                        # md | mcmc | mcmd | mcrelax | kmc | kmc-voronoi |
@@ -259,6 +259,46 @@ md:
   # --- 出力 ---
   combine_traj: true              # スナップショットを combined.traj にまとめる
   view_notebook: false            # nglview で再生する notebook を作る (要 nglview)
+
+# ------------------------- 第一原理 MD (pw.x) --------------------------
+# `ezcal md-qe`。pw.x の calculation='md' / 'vc-md' を 1 回実行し、結果は
+# md-mlip と同じ形 (energy_log.csv, plots/dynamics.*, structures/, combined.traj,
+# summary.json, report.md) にまとめる。DFT の条件 (ecutwfc, k 点, 汎関数, スピン,
+# スメアリング ...) は dft: セクション、並列数・qsub は run: セクションをそのまま使う。
+md_qe:
+  ensemble: nvt                   # nve | nvt | npt | nph
+                                  #   nve/nvt -> calculation='md' (Verlet)
+                                  #   npt/nph -> calculation='vc-md' (Beeman + Parrinello-Rahman)
+  thermostat: null                # null -> nvt: svr、npt: rescaling
+                                  #   nvt: svr | berendsen | andersen | nose | rescaling |
+                                  #        rescale-v | rescale-T | reduce-T
+                                  #   npt: rescaling | nose (vc-md が対応するもののみ)
+  temperature_K: 300.0            # 熱浴の目標温度 (pw.x の tempw)
+  init_temperature_K: null        # 初速の温度 (null -> temperature_K、0 で静止から開始)
+                                  #   md では ezcal が Maxwell-Boltzmann 分布の初速を
+                                  #   ATOMIC_VELOCITIES で与える (seed で再現可能)
+  steps: 50                       # MD ステップ数 (pw.x の nstep)。第一原理なので少なめに
+  timestep_fs: 2.0                # 時間刻み (fs)。pw.x の dt (Rydberg 原子単位) に換算する
+  ttime_fs: 20.0                  # 熱浴の特性時間 (fs) -> nraise = ttime / timestep
+  tolp: 100.0                     # rescaling の許容幅 (K)
+  delta_t: 1.0                    # rescale-T / reduce-T の温度変化
+  fnosep_thz: null                # Nose-Hoover の振動数 (THz)。null -> pw.x 既定
+  pressure_gpa: 0.0               # npt / nph の目標圧力 (GPa、pw.x には kbar で渡す)
+  cell_dynamics: pr               # pr (Parrinello-Rahman) | w (Wentzcovitch)
+  cell_dofree: all                # all | ibrav | z | xy ... (pw.x の cell_dofree)
+  wmass: null                     # セルの仮想質量 (amu)。null -> pw.x 既定
+  cell_factor: null               # vc-md で擬ポテンシャル表を広げる係数 (null -> 2.0)
+  supercell: null                 # [2, 2, 2] のように書くと入力構造を繰り返す
+  seed: null                      # 初速の乱数シード
+  conv_thr: null                  # SCF 収束条件 (Ry)。null -> dft.conv_thr
+                                  #   力の精度に効くので緩めすぎないこと
+  pot_extrapolation: atomic       # 前ステップからの電荷密度の外挿 (atomic | first_order |
+                                  #   second_order)。MgO 8 原子の検証では second_order で
+                                  #   SCF が振動し c_bands で停止、atomic は平均 6 回で収束
+  wfc_extrapolation: none         # 波動関数の外挿 (none | first_order | second_order)
+  npool: null                     # pw.x -nk (k 点並列)。k 点数の約数にすると速い
+  save_interval: 10               # structures/step_*.cif を書き出す間隔
+  combine_traj: true              # 全フレームを combined.traj にまとめる
 
 # ------------------------------- 出力 ------------------------------
 output:

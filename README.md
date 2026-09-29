@@ -17,7 +17,8 @@ ezcal auto  Si.cif          # vc-relax -> scf -> nscf -> dos -> bands まで一�
 ezcal scf Si.cif --ecutwfc 60 --kmesh 8 8 8
 
 ezcal charge MgO.cif        # 電荷密度・原子電荷・3D 可視化
-ezcal md   FePt.cif -T 900  # MLIP で分子動力学 (NVE/NVT/NPT/NPH)
+ezcal md-mlip FePt.cif -T 900  # MLIP で分子動力学 (NVE/NVT/NPT/NPH。旧名 ezcal md)
+ezcal md-qe   Cu.cif -T 600    # Quantum ESPRESSO で第一原理 MD (v0.4.0)
 ezcal mc   FePt.cif --mode mcmc --steps 1000
 ```
 
@@ -92,7 +93,8 @@ ezcal scf Si.cif --set qe.bin_dir=/opt/qe/bin    # 1 回だけ上書きする場
 | `ezcal plot RUNDIR` | 計算済みディレクトリから図を描き直す (バンド/DOS/電荷/MD) | - |
 | `ezcal engines` | 利用可能なエンジンの確認 | - |
 | `ezcal charge` | 電荷密度・原子電荷・3D 可視化 (11 節) | scf, dos |
-| `ezcal md` | 分子動力学 (NVE/NVT/NPT/NPH。13 節) | - |
+| `ezcal md-mlip` | MLIP で分子動力学 (NVE/NVT/NPT/NPH。13 節。旧名 `ezcal md` も可) | - |
+| `ezcal md-qe` | pw.x で第一原理分子動力学 (NVE/NVT/NPT/NPH。13b 節) | - |
 | `ezcal mc` | モンテカルロ (MCMC/MCMD/kMC/event-kMC。13 節) | - |
 | `ezcal mlip list/check/modes/template` | ポテンシャルとモードの確認・雛形出力 (14 節) | - |
 
@@ -368,15 +370,17 @@ ezcal bench report 03_qe_bench --mp-api-key <KEY>     # 予実比較
   (実験用と Materials Project 用の 2 枚。MP の図は API キーを渡したときだけ作られます)。
 - 途中で止めても `--resume` (既定) で続きから流せます。
 
-## 13. 分子動力学とモンテカルロ (`ezcal md` / `ezcal mc`)
+## 13. 分子動力学とモンテカルロ (`ezcal md-mlip` / `ezcal mc`)
+
+> v0.4.0 で `ezcal md` は `ezcal md-mlip` に改名しました（旧名もそのまま動きます）。
 
 機械学習ポテンシャルで MD と配置サンプリングを回します。計算の中身は
 **material-mc**（ASE ベースの MC/MD パッケージ。1 節の `md` extras で入ります）が担当し、
 ezcal は構造の読み込み・calculator の用意・記録と作図を受け持ちます。
 
 ```bash
-ezcal md FePt.cif -T 900 --ensemble nvt --steps 2000
-ezcal md FePt.cif -T 900 --ensemble npt --npt-mask 0 0 1      # z 軸だけ可変
+ezcal md-mlip FePt.cif -T 900 --ensemble nvt --steps 2000
+ezcal md-mlip FePt.cif -T 900 --ensemble npt --npt-mask 0 0 1 # z 軸だけ可変
 ezcal mc FePt.cif --mode mcmc --steps 1000 -T 1000
 ezcal mc FePt.cif --mode mcmd --cycles 10 --mc-steps 20 --md-steps 200
 ezcal mc LiCoO2.cif --mode event-kmc --mobile-species Li --vacancies 1
@@ -411,7 +415,7 @@ LAMMPS の `fix nve/nvt/npt/nph` に相当）。
 | `report.md` / `summary.json` | 設定・受理率・平均量（event-kMC は拡散係数とイオン伝導度も） |
 
 ```bash
-ezcal md Cu.cif --supercell 3 3 3                # 小さいセルは繰り返して使う
+ezcal md-mlip Cu.cif --supercell 3 3 3           # 小さいセルは繰り返して使う
 ezcal mc alloy.cif --species Fe,Pt               # この 2 元素だけ交換
 ezcal mc alloy.cif --species 'Fe,Pt;Li,O'        # 群ごとに独立（Fe⇔Pt, Li⇔O のみ）
 ezcal mc alloy.cif --shuffle --seed 1            # 初期配置を無作為化（再現可）
@@ -421,11 +425,41 @@ ezcal mc alloy.cif --energy-mode peratom --n-swap 4
 構造に He を置くと、material-mc は MC/kMC のエネルギー評価のときだけ He を取り除きます。
 He ⇔ 原子のスワップが空孔ジャンプになるので、空孔を含む配置をサンプリングできます。
 
+## 13b. 第一原理分子動力学 (`ezcal md-qe`, v0.4.0)
+
+Quantum ESPRESSO の `pw.x` で Born-Oppenheimer MD を実行します。`calculation='md'`
+（NVE/NVT）または `'vc-md'`（NPT/NPH）の `md.in` を作って **pw.x を 1 回だけ**起動し、
+終了後に `md.out` を解析して **md-mlip と同じ成果物**（`energy_log.csv`, `energy_profile.png`,
+`plots/dynamics.*`, `structures/step_*.cif`, `combined.traj`, `initial/final.cif`,
+`final_structure.cif`, `summary.json`, `report.md`）を書き出します。
+
+```bash
+ezcal md-qe Cu.cif -T 600 --steps 50 --np 8 -nk 8           # NVT (SVR 熱浴)
+ezcal md-qe Cu.cif -e nve --init-temperature 600 --seed 1    # エネルギー保存の確認
+ezcal md-qe MgO.cif -e npt -T 800 --pressure 5               # vc-md (Parrinello-Rahman)
+ezcal md-qe MgO.cif --steps 2000 --qsub --np 64 -nk 8        # qsub に 1 ジョブで投入
+ezcal md-qe MgO.cif --steps 2000 --collect                   # 終了後に後処理だけ
+```
+
+| `--ensemble` | pw.x | 温度制御 (`--thermostat`) |
+|---|---|---|
+| `nvt`（既定） | `md` + Verlet | `svr`（既定）/ berendsen / andersen / nose / rescaling / rescale-v / rescale-T / reduce-T |
+| `nve` | `md` + Verlet | なし（初速のみ `--init-temperature`） |
+| `npt` | `vc-md` + Beeman + `cell_dynamics='pr'` | `rescaling`（既定）/ nose |
+| `nph` | `vc-md` | 初期温度のみ |
+
+- `--timestep`（fs）と `--ttime`（fs）は pw.x の `dt`（Rydberg 原子単位）と `nraise` に換算されます。
+- `nosym/noinv` は自動で付けます（乱数初速で対称性が壊れるため）。初速は ezcal が
+  Maxwell-Boltzmann 分布から作って `ATOMIC_VELOCITIES` で渡します（`--seed` で再現可）。
+- DFT 条件（`--ecutwfc --kmesh --functional --spin --hubbard-u ...`）と実行系
+  （`--np --qsub --dry-run`）は通常タスクと共通。MD 固有の既定は `qe_config.yaml` の `md_qe:` です。
+- `nosym` で k 点が減らないので `-nk`（`--npool`）が非常に効きます。
+
 ## 14. ポテンシャルの切り替え (`ezcal mlip`)
 
 ezcal が MLIP / NNP に求めるのは **ASE の calculator を 1 つ作れること**だけです。
 指定方法は 3 通りで、上のものが優先されます。`--engine mlip` の DFT 系タスクでも、
-`ezcal md` / `ezcal mc` でも同じ指定が使えます。
+`ezcal md-mlip` / `ezcal mc` でも同じ指定が使えます。
 
 | 方法 | 設定キー | CLI |
 |---|---|---|
@@ -540,9 +574,10 @@ k 点は **Materials Project / VASP の line mode と同じく区間ごとに独
 ## 16. テスト
 
 ```bash
-python -m pytest tests -q       # 108 件、QE 不要
+python -m pytest tests -q       # 133 件、QE 不要
 
 cd 02_ezcal_test    && ./run_tests.sh    # 36 件: DFT の一通り (8 コア、緩い収束条件)
 cd 04_charge_mapping && ./run_tests.sh   # 11 件: 電荷密度・原子電荷・3D マッピング
 cd 05_md_mc_test     && ./run_tests.sh   # 28 件: MD / MC 全モードとポテンシャル切り替え
+cd 06_md_qe_test     && ./run_tests.sh   # 16 件: md-qe (Cu / MgO) と既存モードへの影響確認
 ```

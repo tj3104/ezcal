@@ -2,6 +2,7 @@
 
 - 作成日: 2026-09-03（反強磁性・VASP エンジン・ベンチマーク・電荷解析を追記）
 - 更新日: 2026-09-07（電荷密度・価数の 3D 可視化、MD/モンテカルロ、ポテンシャル切り替えを追記）
+- 更新日: 2026-09-29（v0.4.0: Quantum ESPRESSO による第一原理 MD `md-qe` を追加、`md` → `md-mlip` に改名）
 - 対象: `mission.md`「ezcal(Easy Calculation)パッケージの作成」
 - 環境: WSL2 / Ubuntu, Python 3.12.3 (`/home/tajimamainpc/.venv/ezcalenv312`),
   Quantum ESPRESSO 7.5 (`~/repos/q-e/bin`), CPU 16 コア (テストは 8 コア使用)
@@ -17,12 +18,14 @@
 | `qe_config.yaml` (雛形は `src/ezcal/data/default_config.yaml`) | 全既定値。`ezcal config init` で書き出し |
 | `run_qe.sh` | qsub 用テンプレート (パッケージ内にも同梱) |
 | `notebooks/ezcal_demo.ipynb` | MP API キーをその場で入力する形式のデモ (実行済みの `executed_ezcal_demo.ipynb` 付き) |
-| `tests/test_ezcal.py` | QE 不要の単体テスト 108 件 |
+| `tests/test_ezcal.py` | QE 不要の単体テスト 133 件 (md-qe 7 件を追加) |
 | `02_ezcal_test/run_tests.sh` | 実計算を含む受け入れテスト 36 件 |
 | `03_qe_bench/` | 金属20＋酸化物20 の予実比較 (`ezcal bench`) |
 | `04_charge_mapping/` | 電荷密度・原子電荷・3D マッピングの検証 11 件 (20260907) |
 | `05_md_mc_test/` | material-mc による MD / MC の検証 28 件 (20260907) |
-| `docs/manual.html` | 利用者向けハンドブック (全 15 章) |
+| `06_md_qe_test/` | Quantum ESPRESSO による第一原理 MD (md-qe) の検証 16 件 (20260929) |
+| `src/ezcal/md_qe.py` | md-qe 本体: pw.x の md / vc-md 入力生成・実行・md.out の解析・md-mlip と共通の成果物出力 (20260929) |
+| `docs/manual.html` | 利用者向けハンドブック (全 16 章。13 章が md-qe) |
 | `README.md` / `docs/EXTENDING.md` | 使い方 / 拡張手順 |
 
 インストールとテストは以下で再現できます。
@@ -30,10 +33,11 @@
 ```bash
 source /home/tajimamainpc/.venv/ezcalenv312/bin/activate
 uv pip install -e .
-python -m pytest tests -q                 # 108 passed
+python -m pytest tests -q                 # 133 passed
 cd 02_ezcal_test  && ./run_tests.sh full  # 36 passed, 0 failed
 cd 04_charge_mapping && ./run_tests.sh    # 11 passed, 0 failed
 cd 05_md_mc_test     && ./run_tests.sh    # 28 passed, 0 failed
+cd 06_md_qe_test     && ./run_tests.sh    # 16 passed, 0 failed
 ```
 
 ---
@@ -73,6 +77,12 @@ cd 05_md_mc_test     && ./run_tests.sh    # 28 passed, 0 failed
 | MD テストは SevenNet ベース (20260907) | `05_md_mc_test/` で 28 件すべて PASS (既定 calculator は SevenNet 7net-0) |
 | MLIP モデルの切り替え (20260907) | `--model` / `--mlip-backend` / `--calc-script` / `--calc-factory` / `--calc-option`。レシピは 1 ファイル 1 ポテンシャル (`calculators/recipes/`)、`mlip.recipe_dirs` で追加可 |
 | NNP は ASE calculator を定義できれば動く設計 (20260907) | `ezcal.calculators` が唯一の入口。`engines/mlip.py` も `md.py` も calculator の作り方を知らない |
+| MD を Quantum ESPRESSO でも実行 (20260929) | `ezcal md-qe`。pw.x の `calculation='md'` (NVE/NVT) / `'vc-md'` (NPT/NPH) を 1 回の実行で流す。DFT 条件・並列・qsub は既存オプションをそのまま使う |
+| 従来の md を md-mlip に改名 (20260929) | `ezcal md-mlip`。旧名 `ezcal md` も互換のため残し (一覧には非表示)、05 のテストスクリプトは無修正で動く |
+| md-qe のまとめ方を md-mlip に準拠 (20260929) | 同じファイル一式 (`energy_log.csv` / `energy_profile.png` / `plots/dynamics.*` / `structures/step_*.cif` / `combined.traj` / `initial,final,final_structure.cif` / `summary.json` / `report.md`) と同じ列名。`DynamicsResult`・`summarize_records`・`plot_dynamics` を共用し、`ezcal plot` の再描画もそのまま効く |
+| 他の計算モードへの影響なし (20260929) | 既存モジュールの変更は CLI の登録・`_print_dynamics` の表示行追加・`DYNAMICS_PANELS` への圧力パネル追加 (その列がある記録でのみ描かれる) のみ。pytest 全件・scf・md-mlip・旧名 md の回帰を 06 で確認 |
+| md-qe の簡易テスト Cu と小さい酸化物 (20260929) | `06_md_qe_test/`: Cu (fcc 4 原子) で NVT/NVE/NPT/Berendsen、MgO (岩塩 8 原子) で NVT/NPH |
+| manual.html に md-qe を追記 (20260929) | 13 章「第一原理 MD（md-qe）」を新設、コマンド一覧・設定キー表・qsub 章・用語集も更新 |
 
 ---
 
@@ -448,6 +458,43 @@ SevenNet (7net-0) を calculator として 28 件、いずれも PASS (合計 2 
 - `emt` / `lj` は ASE 内蔵なので、torch の無い環境でもワークフローの配線を確認できます
   (単体テストはこれを使っています)。
 
+### 5.12 第一原理 MD `md-qe` (20260929, v0.4.0) — `06_md_qe_test/`
+
+16 件すべて PASS (合計約 5 分、8 MPI・`-nk 8`)。Cu は fcc 慣用セル 4 原子、MgO は岩塩の慣用セル 8 原子。
+k 点 2×2×2、SCF 1e-7 Ry、Δt = 2 fs、カットオフは擬ポテンシャルの推奨値 (Cu 45 Ry / MgO 58 Ry) を使用。
+
+| 実行 | ensemble / 熱浴 | ステップ | 結果の要点 | 時間 |
+|---|---|---|---|---|
+| Cu_nvt | nvt / svr, 600 K | 30 | 完走。初速 600 K から等分配で運動エネルギーがポテンシャルへ移り、後半平均 241 K (4 原子なので揺らぎ大) | 44 s |
+| Cu_nve | nve, 初速 600 K | 30 | **E_pot + E_kin の変動 0.57 meV/原子**。温度は 600→41→133 K と集団振動 (KE⇔PE) | 42 s |
+| Cu_npt | npt (vc-md) / rescaling | 20 | 体積 47.83→46.68 Å³、瞬間温度・圧力を記録 | 30 s |
+| Cu_nvt_berendsen | nvt / berendsen | 10 | 熱浴の切り替えが効くこと | 16 s |
+| MgO_nvt | nvt / svr, 600 K | 30 | 完走、後半平均 349 K、平均圧力 5.7 GPa (a=4.21 Å は PBE 平衡より小さい) | 64 s |
+| MgO_nph | nph (vc-md), 初速 600 K | 15 | 圧力 +4.5 GPa から膨張し 74.6→80.6 Å³ (行き過ぎて −5 GPa)。E_tot は 3 meV 以内 | 33 s |
+| qsub / collect / plot / 不正な組み合わせ | — | — | `md.qsub.sh` に `pw.x -in md.in -nk 8`・walltime が入る。`--collect` で md.out から成果物を再生成。`ezcal plot` で再描画。`-e npt --thermostat svr` は実行前にエラー | — |
+| 回帰 | — | — | `md-mlip`・旧名 `md`・`scf`・pytest 133 件 (md-qe 7 件を追加)。md-qe と md-mlip が同じファイル一式を出すこと | — |
+
+**開発中に見つけて対処したこと**
+
+- **`nosym` が必須**: 対称性を残すと、乱数の初速で 2 ステップ目に `checkallsym` エラーになる。
+  さらに反転対称のある fcc Cu では、pw.x の `start_therm` が等価原子の速度を打ち消すため 0 K から始まる。
+  md-qe は `nosym/noinv` を必ず付ける。
+- **初速は ezcal が生成**: Maxwell-Boltzmann 分布 → 重心運動を除去 → pw.x の温度定義 (3N−3 自由度) に合わせて
+  スケールし、`ATOMIC_VELOCITIES a.u.` で渡す。0 ステップ目の温度が指定値 (600.0 K) と一致することを確認した
+  (単位は bohr / Rydberg 時間 = 0.048378 fs)。これで `--seed` による再現と、NVE の初期温度指定ができる。
+- **外挿の既定を atomic / none に変更**: `pot_extrapolation='second_order'` では MgO の SCF が最初の数ステップで
+  振動し、`c_bands: too many bands are not converged` で停止した。`atomic` では完走し、SCF 回数も
+  平均 20 回前後 → 6 回に減った (Cu の 30 ステップも 121 s → 44 s)。
+- **k 点並列が決定的**: nosym で k 点が減らないため `-nk 8` で 1 ステップ約 70 s → 約 3 s。
+- **vc-md の温度表記**: `vcsmd.f90` が出す `T` は累積平均の運動エネルギーを (N+1) 自由度で割った値で、
+  瞬間温度ではない。ezcal は Ekin から瞬間温度を計算し直し、元の値は使わない。
+
+**設計**: `src/ezcal/md_qe.py` が、入力生成は既存の `PwInput` と `QEEngine.prepare()` (擬ポテンシャル・カットオフ自動決定)、
+実行は既存の `Scheduler`、後処理は md-mlip の `DynamicsResult` / `summarize_records` / `plot_dynamics` を再利用する。
+既存モジュールへの変更は、CLI への登録、`_print_dynamics` の表示 2 行、`DYNAMICS_PANELS` への圧力パネル
+(`pressure_GPa` 列がある記録だけで描かれ、material-mc の記録には出ない) だけで、QE エンジン・ワークフロー・
+material-mc ラッパは変更していない。
+
 ---
 
 ## 6. 既知の制約
@@ -483,7 +530,13 @@ SevenNet (7net-0) を calculator として 28 件、いずれも PASS (合計 2 
   `atoms.set_cell(np.triu(cell))` (または `np.tril`) と丸めてから返すか、
   `Cell.fromcellpar` で組み直した後に微小成分を 0 に丸めること
   (`fromcellpar` 自身が cos(90°)=6.1e-17 由来の残差を作るため、後者も丸めが要ります)。
-- **`ezcal md` / `ezcal mc` は 1 プロセスで動きます**: `--np` は効きません
+- **md-qe の NPT/NPH は pw.x の vc-md の機能に従います**: 熱浴は `rescaling` と `nose` のみ
+  (SVR などは vc-md が対応していない)。NPH は「初期温度だけ与える」ため、`rescaling` の許容幅
+  `tolp` を十分大きくして最初の熱化だけを効かせています。vc-md の出力にある `T` は累積平均なので、
+  ezcal は運動エネルギーから瞬間温度を計算し直して記録します。
+- **md-qe は `nosym` で走るため k 点が減りません**: `-nk` (k 点並列) を k 点数の約数にしてください。
+  pw.x の再起動 (`restart_mode='restart'`) による継続計算は未対応です (`--collect` は後処理のみ)。
+- **`ezcal md-mlip` / `ezcal mc` は 1 プロセスで動きます**: `--np` は効きません
   (MLIP の推論は torch のスレッド並列に任せます)。qsub 投入にも未対応です。
 - **event-kMC は CI-NEB を毎イベント走らせます**。障壁は局所環境でキャッシュされますが、
   初回は系の大きさに比例して時間がかかります。テストでは 3 ステップに絞っています。
@@ -504,6 +557,9 @@ SevenNet (7net-0) を calculator として 28 件、いずれも PASS (合計 2 
   `--calc-script` / `--calc-factory` でその場で指定します。ezcal 本体の変更は不要です。
 - **別の MD / MC モード**: material-mc に `run_*` が増えたら `md.py` の `_MODE_LIST` に
   1 行足すだけで、CLI・作図・レポートはそのまま使えます。
+- **別コードのネイティブ MD (VASP など)**: `md_qe.py` と同じく「入力生成 → `scheduler.execute()` →
+  出力をフレームと `energy_log.csv` の行に変換」の 3 段で書けば、作図・レポート・再描画は共用できます
+  (`docs/EXTENDING.md` 5.1 節)。
 - **別のジョブスケジューラ**: `Scheduler` を継承。テンプレート方式は共通なので、
   Slurm なら `sbatch` 用テンプレートと `submit_cmd`/`status_cmd` の変更だけでも動きます。
 - **新しいタスク**: `workflows.CHAINS` に前段を書き、エンジンの `supported` に追加。

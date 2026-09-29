@@ -7,6 +7,7 @@ src/ezcal/charge.py
 src/ezcal/cli.py
 src/ezcal/config.py
 src/ezcal/md.py
+src/ezcal/md_qe.py
 src/ezcal/plotting.py
 src/ezcal/pseudo.py
 src/ezcal/scheduler.py

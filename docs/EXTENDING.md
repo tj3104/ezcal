@@ -194,7 +194,7 @@ mlip:
 
 ## 5. MD / MC のモードを足す
 
-`ezcal md` / `ezcal mc` は material-mc の `run_*` メソッドを 1 つのモードに対応させて
+`ezcal md-mlip` (旧名 `ezcal md`) / `ezcal mc` は material-mc の `run_*` メソッドを 1 つのモードに対応させて
 呼んでいるだけです。material-mc 側にメソッドが増えたら、`md.py` の `_MODE_LIST` に
 1 行足し、必要なら `build_arguments()` に引数の組み立てを書きます。
 
@@ -206,6 +206,26 @@ ModeSpec("my-mode", "run_my_mode", "説明", "mc", note="一覧に出る補足")
 CLI・作図・レポートはモード名を知らないので、他のファイルは触りません。
 後処理 (energy_log.csv の読み取り、時系列の作図、summary.json / report.md) は
 全モード共通です。
+
+### 5.1 エンジン固有の MD を足す (md-qe の作り方)
+
+v0.4.0 の `ezcal md-qe` は、material-mc を通さずに計算コード自身の MD
+(pw.x の `calculation='md'/'vc-md'`) を 1 回走らせ、出力を md-mlip と同じ形に
+変換する方式です (`src/ezcal/md_qe.py`)。別のコード (VASP の `IBRION=0`、CP2K など)
+へ広げるときも同じ 3 段で書けます。
+
+1. **入力**: エンジンの入力生成 (`PwInput` など) を再利用し、MD 固有のブロックだけ足す
+   (`namelists()` / `render_input()`)。アンサンブル → コードのキーワードの対応表を 1 か所に置く。
+2. **実行**: `Stage` / `Command` を作って `scheduler.execute()` に渡すだけ。
+   local / qsub / dry-run は自動で切り替わる。
+3. **後処理**: 出力をフレーム (ASE Atoms + SinglePointCalculator) と
+   `energy_log.csv` の行 (`step, phase, time_fs, energy_eV, e_kin_eV, e_total_eV,
+   temperature_K, volume_A3, pressure_GPa, msd_A2 ...`) に変換し、
+   `DynamicsResult` と `plotting.plot_dynamics()` に渡す。列名を揃えれば
+   `ezcal plot` の再描画や summary.json / report.md の形は md-mlip と共通になる。
+
+VASP なら `read_md_output()` に当たる部分を `ase.io.read("vasprun.xml", ":")` と
+OSZICAR の温度で置き換えれば、残りはそのまま使えます。
 
 ## 6. タスクを足す
 

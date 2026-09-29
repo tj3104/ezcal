@@ -497,7 +497,7 @@ for _task in TASKS:
 
 # ------------------------------------------------------------ MD / MC
 def _build_md_config(**kw) -> Config:
-    """``ezcal md`` / ``ezcal mc`` 用の設定を組み立てる。"""
+    """``ezcal md-mlip`` / ``ezcal mc`` 用の設定を組み立てる。"""
     cfg = load_config(kw.get("config"))
     overrides: dict[str, Any] = {}
 
@@ -588,7 +588,9 @@ def _print_dynamics(result) -> None:
     for key, label in (("mean_temperature_K", "平均温度 (K)"),
                        ("mean_volume_A3", "平均体積 (A^3)"),
                        ("mean_e_total_eV", "平均全エネルギー (eV)"),
-                       ("mean_msd_A2", "平均 MSD (A^2)")):
+                       ("mean_msd_A2", "平均 MSD (A^2)"),
+                       ("mean_pressure_GPa", "平均圧力 (GPa)"),
+                       ("drift_e_const_meV_per_atom_ps", "保存量ドリフト (meV/原子/ps)")):
         if result.averages.get(key) is not None:
             table.add_row(label, fmt(result.averages[key]))
     for phase, values in result.stats.items():
@@ -762,10 +764,185 @@ def _make_dynamics_command(default_mode: str, doc: str):
     return command
 
 
-app.command("md")(_make_dynamics_command(
-    "md", "分子動力学を実行します (NVE/NVT/NPT/NPH)。material-mc + ASE calculator。"))
+app.command("md-mlip")(_make_dynamics_command(
+    "md", "MLIP / 任意の ASE calculator で分子動力学を実行します (NVE/NVT/NPT/NPH)。"
+          "material-mc を使います。"))
+# v0.3 までの名前。既存のスクリプトが動き続けるよう、一覧には出さずに残しておく
+app.command("md", hidden=True)(_make_dynamics_command(
+    "md", "md-mlip の旧名です (v0.3 互換)。"))
 app.command("mc")(_make_dynamics_command(
     "mcmc", "モンテカルロを実行します (--mode で MCMC / MCMD / kMC / event-kMC を選択)。"))
+
+
+# ------------------------------------------------------ 第一原理 MD
+def _build_md_qe_config(**kw) -> Config:
+    """``ezcal md-qe`` 用の設定。DFT / 実行系は通常タスクと同じ組み立てを使う。"""
+    kw = dict(kw)
+    kw["engine"] = "qe"
+    set_options = kw.pop("set_options", None)
+    cfg = _build_config(**kw)
+    overrides: dict[str, Any] = {}
+
+    def put(key, value):
+        if value is not None:
+            overrides[key] = value
+
+    put("md_qe.ensemble", kw.get("ensemble"))
+    put("md_qe.thermostat", kw.get("thermostat"))
+    put("md_qe.temperature_K", kw.get("temperature"))
+    put("md_qe.init_temperature_K", kw.get("init_temperature"))
+    put("md_qe.steps", kw.get("steps"))
+    put("md_qe.timestep_fs", kw.get("timestep"))
+    put("md_qe.ttime_fs", kw.get("ttime"))
+    put("md_qe.pressure_gpa", kw.get("pressure"))
+    put("md_qe.cell_dynamics", kw.get("cell_dynamics"))
+    put("md_qe.cell_dofree", kw.get("cell_dofree"))
+    put("md_qe.wmass", kw.get("wmass"))
+    put("md_qe.seed", kw.get("seed"))
+    put("md_qe.npool", kw.get("npool"))
+    put("md_qe.save_interval", kw.get("save_interval"))
+    put("md_qe.conv_thr", kw.get("md_conv_thr"))
+    if kw.get("supercell"):
+        overrides["md_qe.supercell"] = [int(v) for v in kw["supercell"]]
+    if kw.get("no_combine_traj"):
+        overrides["md_qe.combine_traj"] = False
+    for dotted, value in parse_set_options(set_options).items():
+        overrides[dotted] = value
+    cfg.apply_overrides(overrides)
+    return cfg
+
+
+@app.command("md-qe")
+def md_qe(
+    structure: str = typer.Argument(..., metavar="STRUCTURE",
+                                    help="CIF/POSCAR/xyz ファイル、または Materials Project ID"),
+    # --- MD ---------------------------------------------------------------
+    ensemble: Optional[str] = typer.Option(
+        None, "--ensemble", "-e", help="nve | nvt | npt | nph (npt/nph は vc-md)"),
+    thermostat: Optional[str] = typer.Option(
+        None, "--thermostat",
+        help="nvt: svr | berendsen | andersen | nose | rescaling | rescale-v ... / "
+             "npt: rescaling | nose"),
+    temperature: Optional[float] = typer.Option(None, "--temperature", "-T",
+                                                help="目標温度 (K)"),
+    init_temperature: Optional[float] = typer.Option(
+        None, "--init-temperature", help="初速の温度 (K)。0 で静止から開始"),
+    steps: Optional[int] = typer.Option(None, "--steps", "-s", help="MD ステップ数"),
+    timestep: Optional[float] = typer.Option(None, "--timestep", help="時間刻み (fs)"),
+    ttime: Optional[float] = typer.Option(None, "--ttime", help="熱浴の特性時間 (fs)"),
+    pressure: Optional[float] = typer.Option(None, "--pressure",
+                                             help="npt/nph の目標圧力 (GPa)"),
+    cell_dynamics: Optional[str] = typer.Option(None, "--cell-dynamics", help="pr | w"),
+    cell_dofree: Optional[str] = typer.Option(None, "--cell-dofree",
+                                              help="all | ibrav | z | xy ..."),
+    wmass: Optional[float] = typer.Option(None, "--wmass", help="セルの仮想質量 (amu)"),
+    supercell: Optional[tuple[int, int, int]] = typer.Option(
+        None, "--supercell", help="入力構造を繰り返す。例: --supercell 2 2 2"),
+    seed: Optional[int] = typer.Option(None, "--seed", help="初速の乱数シード"),
+    save_interval: Optional[int] = typer.Option(
+        None, "--save-interval", help="構造スナップショットの保存間隔"),
+    md_conv_thr: Optional[float] = typer.Option(
+        None, "--conv-thr", help="MD 中の SCF 収束条件 (Ry)"),
+    # --- DFT ----------------------------------------------------------------
+    ecutwfc: Optional[float] = typer.Option(None, help="波動関数のカットオフ (Ry)"),
+    ecutrho: Optional[float] = typer.Option(None, help="電荷密度のカットオフ (Ry)"),
+    kmesh: Optional[tuple[int, int, int]] = typer.Option(
+        None, "--kmesh", help="Monkhorst-Pack メッシュ (スーパーセルに対して)"),
+    kspacing: Optional[float] = typer.Option(None, help="--kmesh 未指定時の k 点間隔 (1/Ang)"),
+    functional: Optional[str] = typer.Option(None, "--functional", "-f",
+                                             help="pbe | pbesol | pz"),
+    input_dft: Optional[str] = typer.Option(None, help="QE の input_dft を直接上書きする"),
+    occupations: Optional[str] = typer.Option(None, help="smearing | fixed"),
+    smearing: Optional[str] = typer.Option(None, help="mv | gaussian | mp | fd"),
+    degauss: Optional[float] = typer.Option(None, help="スメアリング幅 (Ry)"),
+    spin: bool = typer.Option(False, "--spin", "--magnetic",
+                              help="共線スピン分極を有効にする (nspin=2)"),
+    magmom: Optional[str] = typer.Option(
+        None, help="初期磁化。例: --magmom Fe=0.6 / 副格子は --magmom Fe=0.6/-0.6"),
+    afm: Optional[str] = typer.Option(None, "--afm",
+                                      help="反強磁性: 指定元素を +/- の副格子に分割する"),
+    hubbard_u: Optional[str] = typer.Option(None, "--hubbard-u",
+                                            help="DFT+U の U 値。例: --hubbard-u Fe=4.0"),
+    vdw: Optional[str] = typer.Option(None, help="vdw_corr の指定。例: grimme-d3"),
+    pseudo_dir: Optional[str] = typer.Option(None, help="ローカルの UPF ディレクトリ"),
+    pseudo: Optional[str] = typer.Option(None, help="UPF ファイルを固定指定する"),
+    # --- 実行 ---------------------------------------------------------------
+    nproc: Optional[int] = typer.Option(None, "--np", "-n", help="MPI プロセス数"),
+    npool: Optional[int] = typer.Option(None, "--npool", "-nk",
+                                        help="pw.x の k 点並列数 (-nk)"),
+    scheduler: Optional[str] = typer.Option(None, help="local | qsub"),
+    qsub: bool = typer.Option(False, "--qsub", help="--scheduler qsub の短縮形"),
+    qsub_wait: bool = typer.Option(False, "--qsub-wait",
+                                   help="投入したジョブが終わるまで待機して後処理まで行う"),
+    qsub_script: Optional[str] = typer.Option(None, "--qsub-script",
+                                              help="ジョブスクリプトの雛形 (run_qe.sh)"),
+    queue: Optional[str] = typer.Option(None, help="qsub のキュー名"),
+    walltime: Optional[str] = typer.Option(None, help="qsub の walltime"),
+    nodes: Optional[int] = typer.Option(None, help="qsub のノード数"),
+    ppn: Optional[int] = typer.Option(None, help="qsub の 1 ノードあたりプロセス数"),
+    dry_run: bool = typer.Option(False, "--dry-run",
+                                 help="md.in とジョブスクリプトだけ生成し、計算は行わない"),
+    collect: bool = typer.Option(False, "--collect",
+                                 help="pw.x は起動せず、既存の md.out を解析して後処理だけ行う"),
+    # --- 出力 ---------------------------------------------------------------
+    outdir: Optional[str] = typer.Option(None, "--outdir", "-o", help="出力先ルート"),
+    name: Optional[str] = typer.Option(None, "--name", help="実行ディレクトリ名"),
+    plot: Optional[str] = typer.Option(None, "--plot",
+                                       help="matplotlib | plotly | both | none"),
+    dpi: Optional[int] = typer.Option(None, "--dpi"),
+    keep_wfc: bool = typer.Option(False, "--keep-wfc", help="波動関数ファイルを残す"),
+    no_combine_traj: bool = typer.Option(False, "--no-combine-traj",
+                                         help="combined.traj を作らない"),
+    primitive: bool = typer.Option(False, "--primitive/--as-is",
+                                   help="プリミティブセルへ標準化してから始める"),
+    config: Optional[str] = typer.Option(None, "--config", "-c", help="qe_config.yaml のパス"),
+    set_options: Optional[list[str]] = typer.Option(
+        None, "--set", help="任意の設定キーを上書きする。例: --set md_qe.tolp=50"),
+    mp_api_key: Optional[str] = typer.Option(
+        None, "--mp-api-key", envvar="MP_API_KEY", help="Materials Project の API キー"),
+) -> None:
+    """Quantum ESPRESSO (pw.x) で第一原理分子動力学を実行します (NVE/NVT/NPT/NPH)。
+
+    結果のまとめ方 (energy_log.csv / plots/dynamics.* / structures/ /
+    summary.json / report.md) は md-mlip と同じです。
+    """
+    from ezcal.md import DynamicsError
+    from ezcal.md_qe import TITLE, md_settings, run_md_qe
+
+    kw = dict(locals())
+    cfg = _build_md_qe_config(**kw)
+    try:
+        settings = md_settings(cfg)
+    except DynamicsError as exc:
+        _fail(str(exc))
+    struct = _load_structure(structure, primitive, mp_api_key)
+    root = Path(outdir) if outdir else Path(str(cfg.get("output.dir", "ezcal_out")))
+    label = name or f"{struct.composition.reduced_formula}_md-qe_{settings['ensemble']}"
+    rundir = (root / label).resolve()
+
+    table = Table(show_header=False, box=None, pad_edge=False)
+    table.add_column(style="cyan", no_wrap=True)
+    table.add_column()
+    table.add_row("モード", f"md-qe — {TITLE}")
+    table.add_row("組成式", struct.composition.reduced_formula)
+    table.add_row("アンサンブル", f"{settings['ensemble']} "
+                                 f"(pw.x calculation='{settings['calculation']}', "
+                                 f"thermostat={settings['thermostat']})")
+    table.add_row("温度 / ステップ", f"{settings['temperature_K']} K / "
+                                    f"{settings['n_steps']} x {settings['timestep_fs']} fs")
+    table.add_row("スケジューラ", f"{cfg.get('run.scheduler')} (np={cfg.get('run.nproc')})")
+    table.add_row("実行ディレクトリ", str(rundir))
+    console.print(table)
+
+    try:
+        result = run_md_qe(cfg, struct, rundir, collect_only=collect,
+                           log=lambda msg: console.print(f"[dim]{msg}[/]"))
+    except (DynamicsError, StructureError, EngineError, SchedulerError) as exc:
+        _fail(str(exc))
+    cfg.save(rundir / "qe_config.used.yaml")
+    _print_dynamics(result)
+    if not result.ok:
+        raise typer.Exit(1)
 
 
 # --------------------------------------------------------- mlip グループ
@@ -852,7 +1029,7 @@ def mlip_template(
     target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     console.print(f"[green]{target}[/] を書き出しました")
     console.print("[dim]build() を書き換えたあと、"
-                  f"ezcal md STRUCTURE --calc-script {target} で使えます[/]")
+                  f"ezcal md-mlip STRUCTURE --calc-script {target} で使えます[/]")
 
 
 @mlip_app.command("modes")

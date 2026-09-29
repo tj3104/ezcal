@@ -230,7 +230,7 @@ footer p{font-family:var(--sans); font-size:.82rem}
 <aside class="side">
   <div class="brand">
     <span class="n">ezcal</span>
-    <span class="v">0.2.0 · ハンドブック</span>
+    <span class="v">0.4.0 · ハンドブック</span>
   </div>
   <div class="levelbox">
     <span class="cap">表示</span>
@@ -254,9 +254,10 @@ footer p{font-family:var(--sans); font-size:.82rem}
       <li><a href="#trouble" data-lv="b"><span class="k">10</span>困ったときは</a></li>
       <li><a href="#charge" data-lv="b"><span class="k">11</span>電荷密度と原子電荷</a></li>
       <li><a href="#md" data-lv="b"><span class="k">12</span>MD とモンテカルロ</a></li>
-      <li><a href="#mlip" data-lv="a"><span class="k">13</span>ポテンシャルの切り替え</a></li>
-      <li><a href="#bench" data-lv="b"><span class="k">14</span>ベンチマークで確認</a></li>
-      <li><a href="#gloss" data-lv="b"><span class="k">15</span>用語ミニ辞典</a></li>
+      <li><a href="#mdqe" data-lv="b"><span class="k">13</span>第一原理 MD（md-qe）</a></li>
+      <li><a href="#mlip" data-lv="a"><span class="k">14</span>ポテンシャルの切り替え</a></li>
+      <li><a href="#bench" data-lv="b"><span class="k">15</span>ベンチマークで確認</a></li>
+      <li><a href="#gloss" data-lv="b"><span class="k">16</span>用語ミニ辞典</a></li>
     </ol>
   </nav>
 </aside>
@@ -272,6 +273,7 @@ footer p{font-family:var(--sans); font-size:.82rem}
       <span class="fact">venv <b>ezcalenv312</b></span>
       <span class="fact">also <b>SevenNet (MLIP)</b></span>
       <span class="fact">md/mc <b>material-mc</b></span>
+      <span class="fact">ab initio MD <b>pw.x (md-qe)</b></span>
     </div>
     <div class="note">
       <b>このページの読み方</b>
@@ -291,7 +293,7 @@ footer p{font-family:var(--sans); font-size:.82rem}
 <span class="p">$</span> <b>cd /path/to/ezcal</b>              <span class="c"># このリポジトリを置いた場所</span>
 <span class="p">$</span> <b>uv pip install -e .</b>            <span class="c"># uv が無ければ pip install -e . でも可</span>
 <span class="p">$</span> <b>ezcal version</b>
-<span class="c">ezcal 0.2.0  (python 3.12.3)</span></pre></div>
+<span class="c">ezcal 0.4.0  (python 3.12.3)</span></pre></div>
   <p style="margin-top:.9rem">Materials Project から構造を取りたいときや、機械学習ポテンシャル・MD/MC を使いたいときは追加で入れます。</p>
   <div class="cmd"><pre><span class="p">$</span> <b>uv pip install -e '.[all]'</b>        <span class="c"># + mp-api, jupyter</span>
 <span class="p">$</span> <b>uv pip install sevenn</b>             <span class="c"># SevenNet (MLIP)</span>
@@ -358,8 +360,12 @@ k-path (131 points): <b>Γ -&gt; X -&gt; U|K -&gt; Γ -&gt; L -&gt; W -&gt; X</b
       <tr><td class="m"><b>ezcal charge</b></td><td>電荷密度の cube と原子電荷、3D 図（<a href="#charge">11 章</a>）</td>
           <td class="m">scf → dos → charge</td></tr>
       <tr><td class="m"><b>ezcal auto</b></td><td>初期構造から全部</td><td class="m">vc-relax → scf → nscf → dos → bands</td></tr>
-      <tr><td class="m"><b>ezcal md</b></td><td>分子動力学（NVE/NVT/NPT/NPH。<a href="#md">12 章</a>）</td>
+      <tr><td class="m"><b>ezcal md-mlip</b></td><td>分子動力学（NVE/NVT/NPT/NPH。<a href="#md">12 章</a>）。
+          v0.3 までの <code>ezcal md</code> も同じ動作で使えます</td>
           <td class="m">MLIP で MD</td></tr>
+      <tr><td class="m"><b>ezcal md-qe</b></td><td>第一原理分子動力学（NVE/NVT/NPT/NPH。<a href="#mdqe">13 章</a>）。
+          まとめ方は md-mlip と同じ</td>
+          <td class="m">pw.x で MD（md / vc-md）</td></tr>
       <tr><td class="m"><b>ezcal mc</b></td><td>モンテカルロ（MCMC / MCMD / kMC / event-kMC。<a href="#md">12 章</a>）</td>
           <td class="m">MLIP で MC</td></tr>
     </tbody>
@@ -379,12 +385,12 @@ k-path (131 points): <b>Γ -&gt; X -&gt; U|K -&gt; Γ -&gt; L -&gt; W -&gt; X</b
       <tr><td class="m"><b>ezcal config show</b></td><td>いま効いている設定と、それをどのファイルから読んだか。<code>--flat</code> で 1 行 1 キー</td></tr>
       <tr><td class="m"><b>ezcal pseudo list</b> Fe</td><td>その元素で選べる擬ポテンシャル一覧（先頭の <code>*</code> が既定で選ばれるもの）</td></tr>
       <tr><td class="m"><b>ezcal pseudo fetch</b> Si O</td><td>擬ポテンシャルを取得して、種類・価電子数・推奨カットオフを表示</td></tr>
-      <tr><td class="m"><b>ezcal mlip list</b></td><td>使える MLIP レシピと、この環境で読み込めるか（<a href="#mlip">13 章</a>）</td></tr>
+      <tr><td class="m"><b>ezcal mlip list</b></td><td>使える MLIP レシピと、この環境で読み込めるか（<a href="#mlip">14 章</a>）</td></tr>
       <tr><td class="m"><b>ezcal mlip check</b></td><td>いまの設定でどの calculator になるか。<code>--build</code> で実際に作って試す</td></tr>
       <tr><td class="m"><b>ezcal mlip modes</b></td><td>MD / MC で選べるモードの一覧</td></tr>
       <tr><td class="m"><b>ezcal mlip template</b></td><td>自前ポテンシャル用スクリプトの雛形を書き出す</td></tr>
       <tr><td class="m"><b>ezcal bench list</b></td><td>ベンチマーク対象と参照値の一覧</td></tr>
-      <tr><td class="m"><b>ezcal bench run</b></td><td>金属20＋酸化物20を流す（<a href="#bench">14 章</a>）</td></tr>
+      <tr><td class="m"><b>ezcal bench run</b></td><td>金属20＋酸化物20を流す（<a href="#bench">15 章</a>）</td></tr>
       <tr><td class="m"><b>ezcal bench report</b> DIR</td><td>実験値・Materials Project との予実比較</td></tr>
       <tr><td class="m"><b>ezcal vasp registry</b></td><td>mock-vasp が再生できる記録済み計算の一覧</td></tr>
       <tr><td class="m"><b>ezcal vasp record</b> DIR</td><td>計算済みの VASP ディレクトリをレジストリに登録する</td></tr>
@@ -738,7 +744,7 @@ suggested for this set: <b>ecutwfc=58.0 Ry, ecutrho=464.0 Ry</b></div>
 
   <div class="tw">
   <table>
-    <caption>ポテンシャル（<code>--engine mlip</code> と <code>ezcal md</code> / <code>mc</code> で共通）</caption>
+    <caption>ポテンシャル（<code>--engine mlip</code> と <code>ezcal md-mlip</code> / <code>mc</code> で共通）</caption>
     <thead><tr><th>オプション</th><th>既定</th><th>意味</th></tr></thead>
     <tbody>
       <tr><td class="m"><b>--mlip-backend</b></td><td class="def">sevennet</td>
@@ -967,7 +973,7 @@ suggested for this set: <b>ecutwfc=58.0 Ry, ecutrho=464.0 Ry</b></div>
 
   <div class="tw">
   <table>
-    <caption>mlip — ポテンシャルの指定（<a href="#mlip">13 章</a>）</caption>
+    <caption>mlip — ポテンシャルの指定（<a href="#mlip">14 章</a>）</caption>
     <thead><tr><th>キー</th><th>既定</th><th>意味</th></tr></thead>
     <tbody>
       <tr><td class="m">mlip.backend</td><td class="def">sevennet</td><td>同梱レシピ名</td></tr>
@@ -1006,6 +1012,23 @@ suggested for this set: <b>ecutwfc=58.0 Ry, ecutrho=464.0 Ry</b></div>
   </table>
   </div>
 
+  <div class="tw">
+  <table>
+    <caption>md_qe — 第一原理 MD（<a href="#mdqe">13 章</a>）</caption>
+    <thead><tr><th>キー</th><th>既定</th><th>キー</th><th>既定</th></tr></thead>
+    <tbody>
+      <tr><td class="m">md_qe.ensemble</td><td class="def">nvt</td><td class="m">md_qe.pressure_gpa</td><td class="def">0.0</td></tr>
+      <tr><td class="m">md_qe.thermostat</td><td class="def">null (svr / rescaling)</td><td class="m">md_qe.cell_dynamics / cell_dofree</td><td class="def">pr / all</td></tr>
+      <tr><td class="m">md_qe.temperature_K</td><td class="def">300.0</td><td class="m">md_qe.wmass / cell_factor</td><td class="def">null / null</td></tr>
+      <tr><td class="m">md_qe.init_temperature_K</td><td class="def">null</td><td class="m">md_qe.supercell / seed</td><td class="def">null / null</td></tr>
+      <tr><td class="m">md_qe.steps</td><td class="def">50</td><td class="m">md_qe.conv_thr</td><td class="def">null (dft.conv_thr)</td></tr>
+      <tr><td class="m">md_qe.timestep_fs</td><td class="def">2.0</td><td class="m">md_qe.pot_extrapolation / wfc_extrapolation</td><td class="def">atomic / none</td></tr>
+      <tr><td class="m">md_qe.ttime_fs</td><td class="def">20.0</td><td class="m">md_qe.npool</td><td class="def">null</td></tr>
+      <tr><td class="m">md_qe.tolp / delta_t / fnosep_thz</td><td class="def">100 / 1.0 / null</td><td class="m">md_qe.save_interval / combine_traj</td><td class="def">10 / true</td></tr>
+    </tbody>
+  </table>
+  </div>
+
   <h4>書き方の例</h4>
   <div class="cmd"><pre><span class="c"># qe_config.yaml — 研究室のクラスタ用</span>
 <b>qe:</b>
@@ -1031,7 +1054,9 @@ suggested for this set: <b>ecutwfc=58.0 Ry, ecutrho=464.0 Ry</b></div>
   <p class="lead">スケジューラの違いは <code>scheduler.py</code> だけが知っています。使う側はオプションを 1 つ足すだけです。</p>
 
   <div class="cmd"><pre><span class="p">$</span> <b>ezcal auto Si.cif --qsub --queue batch --np 32 --qsub-wait</b>
-<span class="p">$</span> <b>ezcal scf Si.cif --qsub --dry-run</b>     <span class="c"># 投入されるスクリプトを確認するだけ</span></pre></div>
+<span class="p">$</span> <b>ezcal scf Si.cif --qsub --dry-run</b>     <span class="c"># 投入されるスクリプトを確認するだけ</span>
+<span class="p">$</span> <b>ezcal md-qe MgO.cif --steps 2000 --qsub --np 64 -nk 8</b>   <span class="c"># 第一原理 MD（13 章）</span>
+<span class="p">$</span> <b>ezcal md-qe MgO.cif --steps 2000 --collect</b>              <span class="c"># 終了後に後処理だけ</span></pre></div>
 
   <h3>テンプレートの探索順</h3>
   <p><code>./run_qe.sh</code> → <code>run.qsub.script</code> で指定したパス → パッケージ同梱、の順に探します。
@@ -1089,7 +1114,7 @@ export OMP_NUM_THREADS={{OMP_NUM_THREADS}}
   <h3>MLIP / NNP（既定は SevenNet）</h3>
   <p>エネルギー・力・応力・構造最適化のみ。電子状態は扱えないので、bands / dos / nscf を頼まれたら
      黙って別物を出さずに理由を返します。DFT の前段としての粗い緩和に向いています。
-     <b>どのポテンシャルを使うかの指定は <a href="#mlip">13 章</a></b>、
+     <b>どのポテンシャルを使うかの指定は <a href="#mlip">14 章</a></b>、
      MD / MC は <a href="#md">12 章</a> です。</p>
   <div class="cmd"><pre><span class="p">$</span> <b>ezcal vc-relax Si.cif --engine mlip</b>
 <span class="p">$</span> <b>ezcal auto Si.cif --engine mlip</b>                        <span class="c"># 電子状態の段は自動でスキップ</span>
@@ -1106,7 +1131,7 @@ export OMP_NUM_THREADS={{OMP_NUM_THREADS}}
       <tr><td class="m">mlip.model</td><td class="def">null</td><td>モデル名またはパス。null ならレシピの既定</td></tr>
       <tr><td class="m">mlip.device</td><td class="def">cpu</td><td>cpu / cuda / auto</td></tr>
       <tr><td class="m">mlip.options / script / factory</td><td class="def">{} / null / null</td>
-          <td>追加引数、自前スクリプト、import パス（<a href="#mlip">13 章</a>）</td></tr>
+          <td>追加引数、自前スクリプト、import パス（<a href="#mlip">14 章</a>）</td></tr>
       <tr><td class="m">mlip.fmax / steps</td><td class="def">0.02 / 300</td><td>力の閾値（eV/Å）と最大ステップ</td></tr>
       <tr><td class="m">mlip.optimizer</td><td class="def">FIRE</td><td>FIRE / BFGS / LBFGS</td></tr>
       <tr><td class="m">mlip.filter</td><td class="def">frechet</td><td>vc-relax のセルフィルタ（frechet / exp / unit）</td></tr>
@@ -1457,15 +1482,22 @@ rows = []
      <b>material-mc</b>（ASE ベースの MC/MD パッケージ）が担当し、ezcal は構造の読み込み・
      calculator の用意・記録と作図を受け持ちます。</p>
 
-  <div class="cmd"><pre><span class="p">$</span> <b>ezcal md FePt.cif -T 900 --ensemble nvt --steps 2000</b>        <span class="c"># MD だけ</span>
-<span class="p">$</span> <b>ezcal md FePt.cif -T 900 --ensemble npt --npt-mask 0 0 1</b>    <span class="c"># z 軸だけ可変</span>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal md-mlip FePt.cif -T 900 --ensemble nvt --steps 2000</b>   <span class="c"># MD だけ</span>
+<span class="p">$</span> <b>ezcal md-mlip FePt.cif -T 900 --ensemble npt --npt-mask 0 0 1</b> <span class="c"># z 軸だけ可変</span>
 <span class="p">$</span> <b>ezcal mc FePt.cif --mode mcmc --steps 1000 -T 1000</b>          <span class="c"># 元素スワップ MC</span>
 <span class="p">$</span> <b>ezcal mc FePt.cif --mode mcmd --cycles 10 --mc-steps 20 --md-steps 200</b>
 <span class="p">$</span> <b>ezcal mc LiCoO2.cif --mode event-kmc --mobile-species Li --vacancies 1</b>
 <span class="p">$</span> <b>ezcal mlip modes</b>                                            <span class="c"># モード一覧</span></pre></div>
 
+  <div class="note">
+    <b>v0.4.0 で名前が変わりました: <code>ezcal md</code> → <code>ezcal md-mlip</code></b>
+    <p>Quantum ESPRESSO で MD を流す <code>ezcal md-qe</code>（<a href="#mdqe">13 章</a>）を追加したため、
+       MLIP 用の MD は <code>md-mlip</code> になりました。旧名 <code>ezcal md</code> もそのまま動きます
+       （一覧には出ません）。オプション・設定キー（<code>md:</code>）・出力は変わっていません。</p>
+  </div>
+
   <h3>モード</h3>
-  <p><code>ezcal md</code> は <code>--mode md</code>、<code>ezcal mc</code> は <code>--mode mcmc</code> から始まります。
+  <p><code>ezcal md-mlip</code> は <code>--mode md</code>、<code>ezcal mc</code> は <code>--mode mcmc</code> から始まります。
      どちらのコマンドでも <code>--mode</code> で下のどれでも選べます。</p>
   <div class="tw">
   <table>
@@ -1522,7 +1554,7 @@ rows = []
      図だけ作り直すのは <code>ezcal plot &lt;実行ディレクトリ&gt;</code> です。</p>
 
   <h3>よく使う指定</h3>
-  <div class="cmd"><pre><span class="p">$</span> <b>ezcal md Cu.cif --supercell 3 3 3</b>                <span class="c"># 小さいセルは繰り返して使う</span>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal md-mlip Cu.cif --supercell 3 3 3</b>           <span class="c"># 小さいセルは繰り返して使う</span>
 <span class="p">$</span> <b>ezcal mc alloy.cif --species Fe,Pt</b>                <span class="c"># この 2 元素だけ交換</span>
 <span class="p">$</span> <b>ezcal mc alloy.cif --species 'Fe,Pt;Li,O'</b>         <span class="c"># 群ごとに独立（Fe⇔Pt, Li⇔O のみ）</span>
 <span class="p">$</span> <b>ezcal mc alloy.cif --swap-pairs Fe-Pt,Li-O</b>        <span class="c"># ペアを直接指定</span>
@@ -1536,8 +1568,128 @@ rows = []
 </section>
 
 <!-- ========================= 13 ========================= -->
+<section id="mdqe" data-lv="b">
+  <div class="s-head"><span class="s-num">13</span><h2>第一原理 MD（md-qe）</h2><span class="badge b">基本</span></div>
+  <p class="lead">Quantum ESPRESSO の <code>pw.x</code> で Born-Oppenheimer MD を流します。1 ステップごとに SCF を解くので
+     MLIP より数桁重い代わりに、ポテンシャルの学習範囲を気にせず使えます。
+     <b>記録・図・ファイル構成は md-mlip（<a href="#md">12 章</a>）と同じ</b>なので、両者をそのまま見比べられます。</p>
+
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal md-qe Cu.cif -T 600 --steps 50</b>                          <span class="c"># NVT（SVR 熱浴）</span>
+<span class="p">$</span> <b>ezcal md-qe Cu.cif -e nve --init-temperature 600 --seed 1</b>      <span class="c"># エネルギー保存</span>
+<span class="p">$</span> <b>ezcal md-qe MgO.cif -e npt -T 800 --pressure 5 --supercell 2 2 2</b> <span class="c"># vc-md（セル可変）</span>
+<span class="p">$</span> <b>ezcal md-qe MgO.cif -T 900 --steps 2000 --qsub --np 64 -nk 8</b>   <span class="c"># クラスタへ 1 ジョブで投入</span>
+<span class="p">$</span> <b>ezcal md-qe MgO.cif -T 900 --steps 2000 --collect</b>              <span class="c"># 終わったジョブの後処理だけ</span></pre></div>
+
+  <h3>何をしているか</h3>
+  <p>ezcal が <code>md.in</code>（<code>calculation='md'</code> または <code>'vc-md'</code>）を 1 つ作り、<code>pw.x</code> を
+     <b>1 回だけ</b>起動します。ステップごとに Python から pw.x を呼び直す方式ではないので、前ステップの電荷密度・
+     波動関数を次の SCF の出発点に使え（外挿は <code>md_qe.pot_extrapolation</code> / <code>wfc_extrapolation</code>）、qsub でも 1 ジョブで済みます。
+     終わったら <code>md.out</code> を解析して md-mlip と同じ成果物を書き出します。</p>
+  <div class="chain"><span>構造 → md.in</span><span class="ar">→</span><span class="self">pw.x（md / vc-md）</span><span class="ar">→</span><span>md.out を解析</span><span class="ar">→</span><span>energy_log.csv・図・traj・report</span></div>
+
+  <h3>アンサンブルと pw.x の設定</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th class="m">--ensemble</th><th>pw.x</th><th>温度制御（--thermostat）</th><th>セル</th></tr></thead>
+    <tbody>
+      <tr><td class="m">nvt<span class="d">（既定）</span></td><td class="m">calculation='md'<br>ion_dynamics='verlet'</td>
+          <td><b>svr</b>（既定・確率的速度リスケール）/ berendsen / andersen / nose / rescaling / rescale-v / rescale-T / reduce-T</td><td>固定</td></tr>
+      <tr><td class="m">nve</td><td class="m">calculation='md'</td><td>なし（初速だけ <code>--init-temperature</code> で与える）</td><td>固定</td></tr>
+      <tr><td class="m">npt</td><td class="m">calculation='vc-md'<br>ion_dynamics='beeman'<br>cell_dynamics='pr'</td>
+          <td><b>rescaling</b>（既定）/ nose（vc-md が対応するのはこの 2 つ）</td><td>可変（<code>--cell-dofree</code>）</td></tr>
+      <tr><td class="m">nph</td><td class="m">calculation='vc-md'</td><td>初期温度だけ与えて以後は制御しない</td><td>可変</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>熱浴の強さは md-mlip と同じく <code>--ttime</code>（fs）で指定し、pw.x の <code>nraise = ttime / timestep</code> に
+     換算されます。時間刻み <code>--timestep</code>（fs）は Rydberg 原子単位（1 a.u. = 0.048378 fs）の <code>dt</code> に換算されます。
+     使えない組み合わせ（例: <code>-e npt --thermostat svr</code>）は実行前にエラーになります。</p>
+
+  <div class="note">
+    <b>自動で入る設定</b>
+    <p><code>nosym = .true.</code> / <code>noinv = .true.</code> を必ず付けます。乱数の初速は対称性を壊すので、
+       対称化を残すと 2 ステップ目に <code>checkallsym</code> で止まり、反転対称があると pw.x の熱化が等価原子の速度を
+       打ち消して 0 K から始まってしまうためです。<code>calculation='md'</code> では初速を ezcal が
+       Maxwell-Boltzmann 分布から作って <code>ATOMIC_VELOCITIES</code> で渡します（重心運動なし、
+       <code>--seed</code> で再現可、0 ステップ目の温度が pw.x の定義＝3N−3 自由度でちょうど指定値）。</p>
+  </div>
+
+  <h3>DFT の条件と並列</h3>
+  <p>カットオフ・k 点・汎関数・スメアリング・スピン・DFT+U は通常の計算と同じオプション／<code>dft:</code> セクションで
+     指定します（<a href="#tune">04 章</a>）。未指定なら擬ポテンシャルの推奨カットオフと <code>kspacing</code> から自動です。
+     MD 中の SCF 収束だけ変えたいときは <code>--conv-thr</code>（<code>md_qe.conv_thr</code>）です。
+     力の精度に効くので緩めすぎないでください。</p>
+  <div class="note">
+    <b>外挿の既定は atomic / none</b>
+    <p>MgO 8 原子の検証では <code>pot_extrapolation='second_order'</code> で最初の数ステップの SCF が振動し、
+       <code>c_bands: too many bands are not converged</code> で停止しました。<code>atomic</code>（pw.x の既定）では
+       30 ステップ完走し、1 ステップあたりの SCF 回数も平均 20 回前後 → 6 回に減ったため、これを既定にしています。
+       大きな系で試す場合は <code>--set md_qe.pot_extrapolation=second_order</code> で切り替えられます。</p>
+  </div>
+  <div class="note">
+    <b>-nk（k 点並列）がとても効く</b>
+    <p><code>nosym</code> で k 点が減らないため、<code>--npool</code> / <code>-nk</code> を k 点数の約数にすると大きく速くなります。
+       Cu 4 原子・k 2×2×2 では <code>--np 8</code> のままで <b>1 ステップ約 70 s → 約 4 s</b> になりました。</p>
+  </div>
+
+  <h3>出力（md-mlip と同じ構成）</h3>
+  <div class="tree"><b>ezcal_out/Cu_md-qe_nvt/</b>
+├── <i>md.in</i> / <i>md.out</i>                     <span class="cm">pw.x の入出力（--collect はこれを読み直す）</span>
+├── <i>energy_log.csv</i>                     <span class="cm">step, phase, time_fs, E_pot, E_kin, E_tot, T, V, P, MSD, |F|max, 保存量, SCF 回数</span>
+├── <i>energy_profile.png</i>                 <span class="cm">E_pot と E_pot+E_kin の推移</span>
+├── <i>initial.cif</i> / <i>final.cif</i> / <i>final_structure.cif</i>
+├── <i>combined.traj</i>                      <span class="cm">全フレーム（エネルギー・力・応力つき。ASE で読める）</span>
+├── <i>report.md</i> / <i>summary.json</i>            <span class="cm">設定・平均量（後半）・保存量ドリフト</span>
+├── structures/<i>step_*.cif</i>  <i>md_0000000.traj</i>  <span class="cm">スナップショット（--save-interval）</span>
+└── plots/<i>dynamics.png</i> / <i>.html</i>          <span class="cm">E・T・E_tot・体積・圧力・MSD の時系列</span></div>
+  <p style="margin-top:.8rem">図の描き直しは md-mlip と同じく <code>ezcal plot &lt;実行ディレクトリ&gt;</code> です。
+     温度は pw.x の定義（重心を除いた 3N−3 自由度）の瞬間温度です。vc-md の出力にある <code>T</code> は
+     「それまでの平均」なので、ezcal は運動エネルギーから瞬間温度を計算し直して記録します。
+     保存量ドリフト（meV/原子/ps）は NVE の品質確認に使ってください。</p>
+
+  <h3>qsub で長い MD を流す</h3>
+  <p><code>--qsub</code> を付けると <code>md.qsub.sh</code>（<code>run_qe.sh</code> 雛形。<a href="#qsub">07 章</a>）を作って投入します。
+     <code>--qsub-wait</code> なら終了を待って後処理まで行い、待たない場合は終了後に同じコマンドへ
+     <code>--collect</code> を付けて実行すると、pw.x を起動せずに <code>md.out</code> から成果物一式を作ります。</p>
+
+  <h3>主なオプション</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>オプション</th><th>設定キー</th><th>既定</th><th>内容</th></tr></thead>
+    <tbody>
+      <tr><td class="m">-e, --ensemble</td><td class="m">md_qe.ensemble</td><td class="def">nvt</td><td>nve | nvt | npt | nph</td></tr>
+      <tr><td class="m">--thermostat</td><td class="m">md_qe.thermostat</td><td class="def">null</td><td>null なら nvt: svr、npt: rescaling</td></tr>
+      <tr><td class="m">-T, --temperature</td><td class="m">md_qe.temperature_K</td><td class="def">300</td><td>目標温度（pw.x の tempw）</td></tr>
+      <tr><td class="m">--init-temperature</td><td class="m">md_qe.init_temperature_K</td><td class="def">null</td><td>初速の温度。null は目標温度、0 は静止から</td></tr>
+      <tr><td class="m">-s, --steps</td><td class="m">md_qe.steps</td><td class="def">50</td><td>MD ステップ数（nstep）</td></tr>
+      <tr><td class="m">--timestep</td><td class="m">md_qe.timestep_fs</td><td class="def">2.0</td><td>時間刻み（fs）</td></tr>
+      <tr><td class="m">--ttime</td><td class="m">md_qe.ttime_fs</td><td class="def">20</td><td>熱浴の特性時間（fs）→ nraise</td></tr>
+      <tr><td class="m">--pressure</td><td class="m">md_qe.pressure_gpa</td><td class="def">0.0</td><td>npt/nph の目標圧力（GPa、kbar に換算）</td></tr>
+      <tr><td class="m">--cell-dynamics / --cell-dofree / --wmass</td><td class="m">md_qe.cell_*</td><td class="def">pr / all / null</td><td>vc-md のセル運動</td></tr>
+      <tr><td class="m">--supercell</td><td class="m">md_qe.supercell</td><td class="def">null</td><td>構造を繰り返す</td></tr>
+      <tr><td class="m">--seed</td><td class="m">md_qe.seed</td><td class="def">null</td><td>初速の乱数シード</td></tr>
+      <tr><td class="m">--conv-thr</td><td class="m">md_qe.conv_thr</td><td class="def">null</td><td>MD 中の SCF 収束（null は dft.conv_thr）</td></tr>
+      <tr><td class="m">--npool, -nk</td><td class="m">md_qe.npool</td><td class="def">null</td><td>pw.x の k 点並列</td></tr>
+      <tr><td class="m">--save-interval</td><td class="m">md_qe.save_interval</td><td class="def">10</td><td>structures/step_*.cif の間隔</td></tr>
+      <tr><td class="m">--collect</td><td>—</td><td class="def">off</td><td>既存の md.out から後処理だけ行う</td></tr>
+      <tr><td class="m">--set md_qe.KEY=VAL</td><td>—</td><td>—</td><td>tolp, delta_t, fnosep_thz, cell_factor, pot/wfc_extrapolation など</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>ほかに <code>--ecutwfc --kmesh --functional --smearing --spin --magmom --hubbard-u --np --qsub --dry-run --plot</code>
+     などの共通オプションが使えます（<code>ezcal md-qe --help</code>）。</p>
+
+  <div class="warnbox">
+    <b>小さいセルの温度は大きく揺らぐ</b>
+    <p>自由度 3N−3 の運動エネルギーの相対揺らぎは √(2/(3N−3)) なので、4 原子（9 自由度）では約 47% です。
+       また完全結晶から始めると運動エネルギーの半分ほどがポテンシャルへ移る（等分配）ため、平均温度は最初のうち
+       目標より低く出ます。本番は <code>--supercell</code> で数十原子以上にし、平衡化区間を捨てて平均してください。</p>
+  </div>
+</section>
+
+<!-- ========================= 14 ========================= -->
 <section id="mlip" data-lv="a">
-  <div class="s-head"><span class="s-num">13</span><h2>ポテンシャルの切り替え</h2><span class="badge a">応用</span></div>
+  <div class="s-head"><span class="s-num">14</span><h2>ポテンシャルの切り替え</h2><span class="badge a">応用</span></div>
   <p class="lead">ezcal が MLIP / NNP に求めるのは <b>ASE の calculator を 1 つ作れること</b>だけです。
      ポテンシャルごとに設定方法がまるで違っても、指定の仕方は 3 通りに集約されています。</p>
 
@@ -1590,7 +1742,7 @@ rows = []
     from sevenn.calculator import SevenNetCalculator
     return SevenNetCalculator(model=model or "/path/to/checkpoint.pth",
                               device=device, **options)</pre></div>
-  <div class="cmd"><pre><span class="p">$</span> <b>ezcal md Cu.cif --calc-script my_potential.py --calc-option device=cuda</b>
+  <div class="cmd"><pre><span class="p">$</span> <b>ezcal md-mlip Cu.cif --calc-script my_potential.py --calc-option device=cuda</b>
 <span class="p">$</span> <b>ezcal relax Cu.cif --engine mlip --calc-script my_potential.py</b></pre></div>
   <div class="note">
     <b>設定ファイルに書いておくこともできます</b>
@@ -1609,9 +1761,9 @@ rows = []
   </div>
 </section>
 
-<!-- ========================= 14 ========================= -->
+<!-- ========================= 15 ========================= -->
 <section id="bench" data-lv="b">
-  <div class="s-head"><span class="s-num">14</span><h2>ベンチマークで確認</h2><span class="badge b">基本</span></div>
+  <div class="s-head"><span class="s-num">15</span><h2>ベンチマークで確認</h2><span class="badge b">基本</span></div>
   <p class="lead">新しい環境で ezcal が正しく動いているかを 1 コマンドで確かめます。</p>
 
   <p>原子数の少ない金属 20 種・酸化物 20 種を <code>auto</code> で流し、
@@ -1700,9 +1852,11 @@ rows = []
 
 <!-- ========================= 12 ========================= -->
 <section id="gloss" data-lv="b">
-  <div class="s-head"><span class="s-num">15</span><h2>用語ミニ辞典</h2><span class="badge b">基本</span></div>
+  <div class="s-head"><span class="s-num">16</span><h2>用語ミニ辞典</h2><span class="badge b">基本</span></div>
   <p class="lead">オプション名に出てくる言葉だけ、最短で。</p>
   <dl class="gloss">
+    <dt>BOMD</dt><dd>Born-Oppenheimer 分子動力学。各ステップで電子を基底状態（SCF）まで解き、その力で原子を動かす。md-qe が行う MD。</dd>
+    <dt>SVR 熱浴</dt><dd>確率的速度リスケール（Bussi-Donadio-Parrinello）。正しいカノニカル分布を与える温度制御で、md-qe の NVT の既定。</dd>
     <dt>SCF</dt><dd>自己無撞着計算。電子密度が自分自身と矛盾しなくなるまで繰り返す、全ての出発点。</dd>
     <dt>NSCF</dt><dd>SCF で得た電荷密度を固定して、別の（普通はもっと密な）k 点で固有値だけ求める計算。DOS やバンドの前段。</dd>
     <dt>ecutwfc</dt><dd>波動関数を展開する平面波のカットオフ。大きいほど正確で遅い。単位 Ry。</dd>
@@ -1734,7 +1888,7 @@ rows = []
 </section>
 
 <footer>
-  <p>ezcal 0.2.0</p>
+  <p>ezcal 0.4.0</p>
   <p>README.md · docs/EXTENDING.md · docs/REPORT.md · notebooks/ezcal_demo.ipynb · 02_ezcal_test/run_tests.sh</p>
 </footer>
 </main>

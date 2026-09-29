@@ -1103,6 +1103,7 @@ DYNAMICS_PANELS = (
     ("temperature_K", "T (K)", "temperature"),
     ("e_total_eV", "E$_{tot}$ (eV)", "total energy"),
     ("volume_A3", "V (Å$^3$)", "volume"),
+    ("pressure_GPa", "P (GPa)", "pressure"),        # md-qe のみ (応力を出力するため)
     ("msd_A2", "MSD (Å$^2$)", "mean square displacement"),
 )
 
